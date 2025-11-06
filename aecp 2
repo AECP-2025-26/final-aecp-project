@@ -15,20 +15,17 @@ warnings.filterwarnings('ignore')
 
 st.title("Population Time Series Forecasting and Environmental Analysis")
 
+# === File Upload ===
 uploaded_file = st.file_uploader("Upload your CSV file", type=['csv'])
 if uploaded_file is not None:
     try:
         df = pd.read_csv(uploaded_file)
         st.success("Successfully loaded data.")
 
-        # --- CORRECTION START ---
-        # The original code failed to convert old years (1450-1650) to datetime objects,
-        # which resulted in an empty DataFrame after the dropna() call, leading to the error.
-        # FIX: Remove the problematic datetime conversion and use the integer 'year' as the index.
-        # df['year'] = pd.to_datetime(df['year'], format='%Y', errors='coerce') # <-- REMOVED
-        # df.dropna(subset=['year'], inplace=True) # <-- REMOVED
+        # Convert 'year' column to datetime and set as index
+        df['year'] = pd.to_datetime(df['year'], format='%Y', errors='coerce')
+        df.dropna(subset=['year'], inplace=True)
         df.set_index('year', inplace=True)
-        # --- CORRECTION END ---
 
         required_cols = ['population', 'temperature', 'rainfall', 'habitat_index']
         for col in required_cols:
@@ -49,7 +46,6 @@ if uploaded_file is not None:
         if algorithm_choice == 'LSTM':
             # Normalize
             scaler = MinMaxScaler()
-            # The error occurred here when train_data['population'] was empty.
             train_data_scaled = scaler.fit_transform(train_data[['population']])
             test_data_scaled = scaler.transform(test_data[['population']])
             window_size = 5
@@ -107,7 +103,7 @@ if uploaded_file is not None:
             extinction_year = None
             for i, val in enumerate(forecast_full):
                 if val[0] <= 0:
-                    extinction_year = df.index.max() + i + 1 # Index is now an integer year
+                    extinction_year = df.index.year.max() + i + 1
                     break
 
         elif algorithm_choice == 'ARIMA':
@@ -124,7 +120,7 @@ if uploaded_file is not None:
             extinction_year = None
             for i, val in enumerate(forecast_full):
                 if val <= 0:
-                    extinction_year = df.index.max() + i + 1 # Index is now an integer year
+                    extinction_year = df.index.year.max() + i + 1
                     break
 
         elif algorithm_choice == 'SARIMA':
@@ -141,13 +137,13 @@ if uploaded_file is not None:
             extinction_year = None
             for i, val in enumerate(forecast_full):
                 if val <= 0:
-                    extinction_year = df.index.max() + i + 1 # Index is now an integer year
+                    extinction_year = df.index.year.max() + i + 1
                     break
 
         # === Plot Forecast ===
-        years_future = np.arange(df.index.max() + 1, df.index.max() + 1 + future_steps)
+        years_future = np.arange(df.index.year.max() + 1, df.index.year.max() + 1 + future_steps)
         fig, ax = plt.subplots(figsize=(14, 6))
-        ax.plot(df.index, df['population'], label='Historical Population', linewidth=2) # Index is now an integer year
+        ax.plot(df.index.year, df['population'], label='Historical Population', linewidth=2)
         ax.plot(years_future, forecast_full, label=forecast_label, linestyle='--', color='orange')
         ax.set_xlabel('Year')
         ax.set_ylabel('Population')
