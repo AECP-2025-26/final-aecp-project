@@ -1,104 +1,308 @@
 import streamlit as st
-import google.generativeai as genai
-from google.generativeai import types
-import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+import warnings
+from sklearn.metrics import mean_squared_error
 
-# --- Configuration & Initialization ---
+# Suppress warnings for cleaner output
+warnings.filterwarnings('ignore')
 
-# 1. Fetch API Key and Configure
-try:
-    # The API key MUST be stored in Streamlit Secrets for deployment
-    API_KEY = AIzaSyAxnsqU6ZUdC7zlfIW4BHwFsQrHaa32zg0
-except KeyError:
-    st.error("🛑 **API Key Not Found!** Please set the 'GEMINI_API_KEY' in your Streamlit secrets.")
-    st.stop()
+# Set TensorFlow logging to suppress training messages
+tf.get_logger().setLevel('ERROR')
 
-# Cache the configured model setup using st.cache_resource
-# This ensures the model is initialized only once, even across reruns.
-@st.cache_resource
-def setup_model():
-    """Initializes and configures the Gemini model."""
-    
-    # 1. Configure the API key
-    genai.configure(api_key=API_KEY)
-    
-    # 2. Define System Instruction and Model Name
-    SYSTEM_INSTRUCTION = "You are Ramesh and you sell samosas. Don't answer questions a samosa seller wouldn't know. Keep your responses short and in character, maybe suggesting a samosa or chutney."
-    MODEL_NAME = "gemini-2.5-flash"
-    
-    # 3. Instantiate the GenerativeModel with the system instruction
-    model = genai.GenerativeModel(
-        model_name=MODEL_NAME,
-        system_instruction=SYSTEM_INSTRUCTION
-    )
-    return model
+st.set_page_config(layout="wide", page_title="Population Time Series Forecasting")
+st.title("🔬 Population Time Series Forecasting and Environmental Analysis")
 
-# Setup the model once
-model = setup_model()
-
-# --- Streamlit UI and Logic ---
-
-st.set_page_config(page_title="Ramesh's Samosa Shop", layout="centered")
-
-st.title("👨🏾‍🍳 Ramesh's Samosa Chat")
-st.markdown("Hello! Chat with Ramesh, your local, very focused, samosa seller. Try asking him what he sells!")
-
-# Initialize chat history (stores display messages: [{"role": "user/model", "text": "..."}] )
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    
-    # Initial Greeting Logic (mimicking the original script's first prompt)
-    GREET_PROMPT = "Write a short and brief one liner question asking about what the user wants from them perfectly in character"
-    
+uploaded_file = st.file_uploader("Upload your CSV file", type=['csv'])
+if uploaded_file is not None:
     try:
-        greeting_response = model.generate_content(GREET_PROMPT)
-        initial_greeting = greeting_response.text
+        df = pd.read_csv(uploaded_file)
+        st.success("Successfully loaded data. Data must contain 'year', 'population', 'temperature', 'rainfall', 'habitat_index'.")
+
+        # Convert 'year' column to datetime and set as index
+        df['year'] = pd.to_datetime(df['year'], format='%Y', errors='coerce')
+        # Drop rows where year couldn't be parsed
+        df.dropna(subset=['year'], inplace=True)
+        # Ensure the index is numeric year for easier plotting later
+        df.set_index('year', inplace=True)
         
-        # Add the initial greeting to the history
-        st.session_state.messages.append({"role": "model", "text": initial_greeting})
+        # Ensure required columns exist
+        required_cols = ['population', 'temperature', 'rainfall', 'habitat_index']
+        for col in required_cols:
+            if col not in df.columns:
+                st.error(f"Missing column: **{col}**. Please include all: {required_cols}")
+                st.stop()
+
+        # --- Data Split ---
+        # Ensure we have enough data to perform a split
+        if len(df) < 10:
+            st.error("The dataset must contain at least 10 years of data for forecasting.")
+            st.stop()
+            
+        train_size = int(len(df) * 0.8)
+        train_data, test_data = df.iloc[:train_size], df.iloc[train_size:]
         
-    except Exception as e:
-        st.error(f"Error generating initial greeting: {e}. Check your model configuration.")
+        # --- Algorithm Selection and Parameters ---
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            algorithm_choice = st.selectbox(
+                "Choose forecasting algorithm:", ["ARIMA", "SARIMA", "LSTM"]
+            )
+            st.info(f"Selected algorithm: **{algorithm_choice}**")
+        
+        # Initialize variables for output
+        mse, rmse, forecast_label, forecast_test = None, None, None, None
+        forecast_full, extinction_year = None, None
+        
+        # Define the sequence creation function for LSTM
+        def create_sequences(data, window):
+            X, y = [], []
+            for i in range(len(data) - window):
+                # Ensure data is 2D for consistent stacking/appending
+                X.append(data[i:i+window])
+                y.append(data[i+window])
+            # Return as NumPy arrays
+            return np.array(X), np.array(y)
 
+        # === LSTM Configuration and Training ===
+        if algorithm_choice == 'LSTM':
+            with col2:
+                # Let user configure the lookback window
+                max_window = min(len(train_data) // 2, 50) # Limit window size reasonably
+                window_size = st.slider("LSTM Lookback Window Size", 
+                                        min_value=1, 
+                                        max_value=max_window, 
+                                        value=5)
 
-# Display chat messages from history
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["text"])
+            # CRITICAL CHECK for empty X_test (the source of the original error)
+            if len(test_data) <= window_size:
+                st.error(f"Test data size ({len(test_data)} rows) is too small for the selected LSTM window size ({window_size}). The test set must be larger than the window size. Please decrease the window size.")
+                st.stop()
+            
+            # Normalize training and testing data
+            scaler = MinMaxScaler()
+            train_data_scaled = scaler.fit_transform(train_data[['population']])
+            test_data_scaled = scaler.transform(test_data[['population']])
+            
+            # Create sequences
+            X_train, y_train = create_sequences(train_data_scaled, window_size)
+            X_test, y_test = create_sequences(test_data_scaled, window_size)
+            
+            # Reshape for LSTM [samples, time steps, features]
+            X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
+            X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
 
+            # Build and Train LSTM
+            model = Sequential([
+                LSTM(64, activation='relu', input_shape=(X_train.shape[1], X_train.shape[2])),
+                Dense(1)
+            ])
+            model.compile(optimizer='adam', loss='mse')
+            
+            # Training on split data for evaluation
+            with st.spinner("Training LSTM model (80% data)..."):
+                # Use fewer epochs and batch size for faster demo
+                model.fit(X_train, y_train, epochs=20, batch_size=16, verbose=0) 
 
-# Handle user input via the chat input widget
-if prompt := st.chat_input("Ask Ramesh about his samosas..."):
-    
-    # 1. Add user message to state and display
-    st.session_state.messages.append({"role": "user", "text": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+            # Predict and Inverse Transform
+            lstm_predictions_scaled = model.predict(X_test, verbose=0)
+            # Match prediction length to the actual test data used for prediction (y_test)
+            lstm_predictions = scaler.inverse_transform(lstm_predictions_scaled) 
+            
+            # Evaluation
+            # We must only compare the predictions to the part of test_data that was actually used (i.e., y_test length)
+            mse = mean_squared_error(test_data['population'].iloc[window_size:window_size + len(lstm_predictions)], lstm_predictions)
+            rmse = np.sqrt(mse)
+            forecast_label = 'LSTM Forecast'
+            # Assign the predictions to the correct time index for plotting
+            forecast_test = pd.Series(lstm_predictions.flatten(), index=test_data.index[window_size:])
 
-    # 2. Convert display history to model `Contents` format for context
-    # This rebuilds the entire conversation history for the API call to maintain context.
-    chat_history = []
-    for message in st.session_state.messages:
-        # Map the display role 'model' to the API role 'model' and 'user' to 'user'
-        chat_history.append(types.Content(
-            role=message["role"],
-            parts=[types.Part.from_text(message["text"])]
-        ))
-    
-    # 3. Generate response
-    with st.chat_message("model"):
-        with st.spinner("Ramesh is deep frying your request..."):
-            try:
-                # The generate_content call takes the full history (contents) for context
-                response = model.generate_content(chat_history)
-                response_text = response.text
-                st.markdown(response_text)
+            # --- Full Data Training for Future Forecast ---
+            data_scaled_full = scaler.fit_transform(df[['population']])
+            X_full, y_full = create_sequences(data_scaled_full, window_size)
+            X_full = X_full.reshape(X_full.shape[0], X_full.shape[1], 1)
+            
+            model_full = Sequential([
+                LSTM(64, activation='relu', input_shape=(X_full.shape[1], X_full.shape[2])),
+                Dense(1)
+            ])
+            model_full.compile(optimizer='adam', loss='mse')
+            
+            with st.spinner("Training LSTM model on full data for future forecast..."):
+                model_full.fit(X_full, y_full, epochs=20, batch_size=16, verbose=0)
+
+            future_steps = 100
+            last_seq_full = data_scaled_full[-window_size:]
+            lstm_preds_full = []
+            
+            for _ in range(future_steps):
+                input_seq_full = last_seq_full.reshape(1, window_size, 1)
+                pred_scaled = model_full.predict(input_seq_full, verbose=0)
+                lstm_preds_full.append(pred_scaled[0, 0])
+                # Shift the window: drop the oldest observation, append the newest prediction
+                last_seq_full = np.append(last_seq_full[1:], pred_scaled, axis=0) 
+            
+            forecast_full = scaler.inverse_transform(np.array(lstm_preds_full).reshape(-1, 1)).flatten()
+
+        # === ARIMA Configuration and Training ===
+        elif algorithm_choice == 'ARIMA':
+            with col2:
+                 # ARIMA requires parameters (p, d, q)
+                p = st.number_input("ARIMA p (Autoregressive order)", min_value=1, max_value=5, value=3)
+                d = st.number_input("ARIMA d (Differencing order)", min_value=0, max_value=2, value=1)
+                q = st.number_input("ARIMA q (Moving Average order)", min_value=1, max_value=5, value=1)
+                order = (p, d, q)
                 
-                # 4. Add model response to state
-                st.session_state.messages.append({"role": "model", "text": response_text})
+            with st.spinner("Training ARIMA model..."):
+                arima_model = ARIMA(train_data['population'], order=order).fit()
+            
+            arima_forecast_test = arima_model.forecast(steps=len(test_data))
+            mse = mean_squared_error(test_data['population'], arima_forecast_test)
+            rmse = np.sqrt(mse)
+            forecast_label = 'ARIMA Forecast'
+            forecast_test = arima_forecast_test
 
-            except Exception as e:
-                st.error(f"An error occurred during response generation: {e}")
-                st.error("Could not get a response. Please check the Streamlit app logs.")
+            # Full data training for future forecast
+            with st.spinner("Training ARIMA model on full data..."):
+                arima_model_full = ARIMA(df['population'], order=order).fit()
+            
+            future_steps = 100
+            forecast_full = arima_model_full.forecast(steps=future_steps)
 
-# The original script's `while prompt!="exit"` is handled by Streamlit's continuous UI loop.
+        # === SARIMA Configuration and Training ===
+        elif algorithm_choice == 'SARIMA':
+            with col2:
+                # SARIMA requires non-seasonal (p, d, q) and seasonal (P, D, Q, s) orders
+                p = st.number_input("SARIMA p", min_value=1, max_value=5, value=1)
+                d = st.number_input("SARIMA d", min_value=0, max_value=2, value=1)
+                q = st.number_input("SARIMA q", min_value=1, max_value=5, value=1)
+                P = st.number_input("SARIMA P (Seasonal AR)", min_value=0, max_value=2, value=0)
+                D = st.number_input("SARIMA D (Seasonal Diff)", min_value=0, max_value=1, value=0)
+                Q = st.number_input("SARIMA Q (Seasonal MA)", min_value=0, max_value=2, value=0)
+                s = st.number_input("SARIMA s (Seasonal Period)", min_value=0, max_value=12, value=0)
+                order = (p, d, q)
+                seasonal_order = (P, D, Q, s)
+
+            with st.spinner("Training SARIMA model..."):
+                sarima_model = SARIMAX(train_data['population'], order=order, seasonal_order=seasonal_order).fit(disp=False)
+            
+            sarima_forecast_test = sarima_model.forecast(steps=len(test_data))
+            mse = mean_squared_error(test_data['population'], sarima_forecast_test)
+            rmse = np.sqrt(mse)
+            forecast_label = 'SARIMA Forecast'
+            forecast_test = sarima_forecast_test
+
+            # Full data training for future forecast
+            with st.spinner("Training SARIMA model on full data..."):
+                sarima_model_full = SARIMAX(df['population'], order=order, seasonal_order=seasonal_order).fit(disp=False)
+            
+            future_steps = 100
+            forecast_full = sarima_model_full.forecast(steps=future_steps)
+
+        # --- Extinction Year Calculation (Applies to all) ---
+        if forecast_full is not None:
+            extinction_year = None
+            # Check for the first year population dips to 0 or below
+            for i, val in enumerate(forecast_full):
+                if val <= 0:
+                    extinction_year = df.index.year.max() + i + 1
+                    break
+
+        # --- Display Results ---
+        st.markdown("---")
+        
+        # === Plot Forecast ===
+        if forecast_full is not None:
+            years_future = np.arange(df.index.year.max() + 1, df.index.year.max() + 1 + future_steps)
+            
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.plot(df.index.year, df['population'], label='Historical Population', color='#1f77b4', linewidth=2)
+            
+            # Plot Test Forecast (for visual check against test_data, optional)
+            if forecast_test is not None:
+                # Need to use the index created in the specific algorithm block
+                if algorithm_choice == 'LSTM':
+                    ax.plot(forecast_test.index.year, forecast_test.values, label=f'Test Set Prediction ({algorithm_choice})', color='#ff7f0e', linestyle='-.', alpha=0.6)
+                else: # ARIMA/SARIMA
+                    ax.plot(forecast_test.index.year, forecast_test.values, label=f'Test Set Prediction ({algorithm_choice})', color='#ff7f0e', linestyle='-.', alpha=0.6)
+
+            # Plot Future Forecast
+            ax.plot(years_future, forecast_full, label=f'Future Forecast ({algorithm_choice})', color='#2ca02c', linestyle='--')
+            
+            # Mark the extinction point if predicted
+            if extinction_year:
+                 ax.axvline(extinction_year, color='red', linestyle=':', label=f'Predicted Extinction: {extinction_year}')
+                 ax.set_ylim(bottom=-100) # Allow negative population to show the extinction point
+
+            ax.set_xlabel('Year', fontsize=12)
+            ax.set_ylabel('Population', fontsize=12)
+            ax.set_title(f'Population Forecast using {algorithm_choice}', fontsize=14)
+            ax.legend()
+            ax.grid(True, linestyle=':', alpha=0.7)
+            st.pyplot(fig)
+        
+        # === Summary Metrics ===
+        st.write("### 📈 Model Performance and Extinction Analysis")
+        
+        summary_cols = st.columns(3)
+        if rmse is not None:
+            summary_cols[0].metric(label="Model RMSE (Test Set)", value=f"{rmse:.2f}", help="Root Mean Square Error: Lower is better.")
+        
+        if extinction_year:
+            summary_cols[1].markdown(f"**Predicted Extinction Year**")
+            summary_cols[1].warning(f"{extinction_year}")
+        else:
+            summary_cols[1].markdown(f"**Predicted Extinction Year**")
+            summary_cols[1].success(f"Not predicted within {future_steps} years.")
+
+        summary_cols[2].metric(label="Total Historical Years", value=len(df))
+
+        st.markdown("---")
+
+        # === Environmental Analysis ===
+        st.write("### 🌳 Environmental Vector Analysis")
+        st.info("Identify the average environmental conditions ('temperature', 'rainfall', 'habitat_index') associated with a 'thriving' population range in the historical data.")
+
+        min_pop, max_pop = int(df['population'].min()), int(df['population'].max())
+        
+        # Use columns for cleaner input layout
+        env_col1, env_col2 = st.columns(2)
+        with env_col1:
+            low_thriving = st.number_input("Enter **lower bound** of thriving population range:", 
+                                            min_value=min_pop, 
+                                            max_value=max_pop, 
+                                            value=int(df['population'].quantile(0.75)))
+        with env_col2:
+            high_thriving = st.number_input("Enter **upper bound** of thriving population range:", 
+                                            min_value=low_thriving, 
+                                            max_value=max_pop, 
+                                            value=max_pop)
+
+        # Filter and Report Environmental Vectors
+        thriving_years = df[(df['population'] >= low_thriving) & (df['population'] <= high_thriving)]
+        
+        if thriving_years.empty:
+            st.info("No years found in that thriving population range in the historical data.")
+        else:
+            environmental_means = thriving_years[['temperature', 'rainfall', 'habitat_index']].mean().round(2)
+            st.write("#### Optimal Average Conditions for Thriving Population:")
+            
+            env_results = pd.DataFrame({
+                "Metric": ["Temperature", "Rainfall", "Habitat Index"],
+                "Average Value": [
+                    f"{environmental_means['temperature']} °C",
+                    f"{environmental_means['rainfall']} mm",
+                    f"{environmental_means['habitat_index']}"
+                ]
+            })
+            st.dataframe(env_results.set_index('Metric'), use_container_width=True)
+
+    except Exception as e:
+        st.error(f"An unexpected error occurred during data processing. Check your data format and column types: {e}")
