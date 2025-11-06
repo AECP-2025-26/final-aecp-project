@@ -1,0 +1,104 @@
+import streamlit as st
+import google.generativeai as genai
+from google.generativeai import types
+import os
+
+# --- Configuration & Initialization ---
+
+# 1. Fetch API Key and Configure
+try:
+    # The API key MUST be stored in Streamlit Secrets for deployment
+    API_KEY = AIzaSyAxnsqU6ZUdC7zlfIW4BHwFsQrHaa32zg0
+except KeyError:
+    st.error("🛑 **API Key Not Found!** Please set the 'GEMINI_API_KEY' in your Streamlit secrets.")
+    st.stop()
+
+# Cache the configured model setup using st.cache_resource
+# This ensures the model is initialized only once, even across reruns.
+@st.cache_resource
+def setup_model():
+    """Initializes and configures the Gemini model."""
+    
+    # 1. Configure the API key
+    genai.configure(api_key=API_KEY)
+    
+    # 2. Define System Instruction and Model Name
+    SYSTEM_INSTRUCTION = "You are Ramesh and you sell samosas. Don't answer questions a samosa seller wouldn't know. Keep your responses short and in character, maybe suggesting a samosa or chutney."
+    MODEL_NAME = "gemini-2.5-flash"
+    
+    # 3. Instantiate the GenerativeModel with the system instruction
+    model = genai.GenerativeModel(
+        model_name=MODEL_NAME,
+        system_instruction=SYSTEM_INSTRUCTION
+    )
+    return model
+
+# Setup the model once
+model = setup_model()
+
+# --- Streamlit UI and Logic ---
+
+st.set_page_config(page_title="Ramesh's Samosa Shop", layout="centered")
+
+st.title("👨🏾‍🍳 Ramesh's Samosa Chat")
+st.markdown("Hello! Chat with Ramesh, your local, very focused, samosa seller. Try asking him what he sells!")
+
+# Initialize chat history (stores display messages: [{"role": "user/model", "text": "..."}] )
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    
+    # Initial Greeting Logic (mimicking the original script's first prompt)
+    GREET_PROMPT = "Write a short and brief one liner question asking about what the user wants from them perfectly in character"
+    
+    try:
+        greeting_response = model.generate_content(GREET_PROMPT)
+        initial_greeting = greeting_response.text
+        
+        # Add the initial greeting to the history
+        st.session_state.messages.append({"role": "model", "text": initial_greeting})
+        
+    except Exception as e:
+        st.error(f"Error generating initial greeting: {e}. Check your model configuration.")
+
+
+# Display chat messages from history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["text"])
+
+
+# Handle user input via the chat input widget
+if prompt := st.chat_input("Ask Ramesh about his samosas..."):
+    
+    # 1. Add user message to state and display
+    st.session_state.messages.append({"role": "user", "text": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # 2. Convert display history to model `Contents` format for context
+    # This rebuilds the entire conversation history for the API call to maintain context.
+    chat_history = []
+    for message in st.session_state.messages:
+        # Map the display role 'model' to the API role 'model' and 'user' to 'user'
+        chat_history.append(types.Content(
+            role=message["role"],
+            parts=[types.Part.from_text(message["text"])]
+        ))
+    
+    # 3. Generate response
+    with st.chat_message("model"):
+        with st.spinner("Ramesh is deep frying your request..."):
+            try:
+                # The generate_content call takes the full history (contents) for context
+                response = model.generate_content(chat_history)
+                response_text = response.text
+                st.markdown(response_text)
+                
+                # 4. Add model response to state
+                st.session_state.messages.append({"role": "model", "text": response_text})
+
+            except Exception as e:
+                st.error(f"An error occurred during response generation: {e}")
+                st.error("Could not get a response. Please check the Streamlit app logs.")
+
+# The original script's `while prompt!="exit"` is handled by Streamlit's continuous UI loop.
