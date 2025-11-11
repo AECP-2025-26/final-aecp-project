@@ -42,29 +42,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<p class="main-header">Population Time Series Forecasting & Environmental Analysis</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-header">AECP: Animal Extinction Calendar Predictor</p>', unsafe_allow_html=True)
 
 # --- Welcome and Introduction ---
 st.write("""
-Welcome to the Time Series Analyst! This application allows you to forecast population trends based on historical data and analyze the environmental conditions (temperature, rainfall, habitat index) that correlate with periods of high population.
+Welcome to the Animal Extinction Calendar Predictor (AECP). This tool forecasts animal population trends using statistical and deep learning models, and identifies the optimal environmental conditions for species survival based on your historical data.
 """)
-
-with st.expander("📚 **Learn the Science: Technical Terms Explained**"):
-    st.markdown("""
-    ### Time Series Forecasting Models
-    Time series data is indexed by time (like annual data). Forecasting predicts future values based on past observations.
-
-    * **ARIMA (AutoRegressive Integrated Moving Average):** A statistical model that looks at dependencies between an observation and a number of lagged observations (AR component), the difference between raw observations to make the series stationary (I component), and the dependency between an observation and a residual error from a moving average model (MA component).
-    * **SARIMA (Seasonal AutoRegressive Integrated Moving Average):** An extension of ARIMA that explicitly supports the modeling of time series data with a seasonal component (like monthly or quarterly data), although here we treat the annual data simply.
-    * **LSTM (Long Short-Term Memory):** A specialized type of Recurrent Neural Network (RNN) in deep learning. LSTMs are designed to remember sequential information over long periods, making them highly effective for complex, non-linear time series patterns.
-
-    ### Data Processing & Evaluation Metrics
-    * **MinMaxScaler:** A data transformation technique that scales features to a fixed range, typically 0 to 1. This is crucial for Neural Networks like LSTM to prevent features with larger values from dominating the learning process.
-    * **MSE (Mean Squared Error):** A common metric to measure the quality of a forecast. It calculates the average of the squares of the errors (the difference between the actual value and the predicted value). Lower MSE is better.
-    $$MSE = \frac{1}{n}\sum_{t=1}^{n} (A_t - F_t)^2$$
-    * **RMSE (Root Mean Squared Error):** The square root of the MSE. It has the same units as the forecasted quantity (e.g., population count), making it easier to interpret than MSE. Lower RMSE is better.
-    $$RMSE = \sqrt{MSE}$$
-    """)
 
 # --- File Uploader Starts Here ---
 uploaded_file = st.file_uploader("Upload your annual time-series CSV file", type=['csv'])
@@ -88,7 +71,7 @@ if uploaded_file is not None:
         # Ensure data is sorted by index (year)
         df.sort_index(inplace=True)
 
-        st.success(f"✅ Data loaded successfully. Historical range: **{df.index.year.min()}** to **{df.index.year.max()}**")
+        st.success(f"Data loaded successfully. Historical range: **{df.index.year.min()}** to **{df.index.year.max()}**")
         
         # --- Model Selection and Data Split ---
         # 80/20 split for training and testing
@@ -100,8 +83,9 @@ if uploaded_file is not None:
         with col1:
             algorithm_choice = st.selectbox(
                 "Select a forecasting model:", 
-                ["ARIMA", "SARIMA", "LSTM"],
-                help="Choose the algorithm to model the population trend."
+                options=["ARIMA", "SARIMA", "LSTM"],
+                index=0,
+                help="ARIMA (AutoRegressive Integrated Moving Average): A classical statistical model that analyzes dependencies and differences in the data. SARIMA (Seasonal ARIMA): An extension of ARIMA useful for data with repeating seasonal patterns. LSTM (Long Short-Term Memory): A deep learning neural network capable of finding complex, non-linear patterns over long sequences of time."
             )
         with col2:
             future_steps = st.slider("Forecast Years:", min_value=10, max_value=100, value=50, step=10, help="Number of years to forecast into the future.")
@@ -113,13 +97,12 @@ if uploaded_file is not None:
         rmse, mse = 0, 0
         
         if algorithm_choice == 'LSTM':
-            # Keras/TensorFlow model requires sequence creation and scaling
+            # LSTM requires data normalization (MinMaxScaler) and sequence creation
             scaler = MinMaxScaler()
             train_data_scaled = scaler.fit_transform(train_data[['population']])
             test_data_scaled = scaler.transform(test_data[['population']])
-            window_size = 5
+            window_size = 5 # Defines the number of past years used to predict the next year
             
-            @st.cache_data
             def create_sequences(data, window):
                 X, y = [], []
                 for i in range(len(data) - window):
@@ -130,13 +113,11 @@ if uploaded_file is not None:
             # Create sequences for training and testing
             X_train, y_train = create_sequences(train_data_scaled, window_size)
             
-            # Check if we have enough data for test sequence creation
             if len(test_data_scaled) > window_size:
                 X_test, y_test = create_sequences(test_data_scaled, window_size)
             else:
-                # If test set is too small, skip test evaluation for visual clarity, train directly on full data
                 st.warning(f"Test data size ({len(test_data_scaled)}) is too small for a window size of {window_size}. Skipping test set evaluation.")
-                X_test = X_train # Dummy assignment to satisfy later block
+                X_test = [] 
                 
             X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
 
@@ -145,6 +126,7 @@ if uploaded_file is not None:
             X_full, y_full = create_sequences(data_scaled_full, window_size)
             X_full = X_full.reshape(X_full.shape[0], X_full.shape[1], 1)
             
+            # The model architecture: LSTM layer for sequence memory, Dense layer for output
             model_full = Sequential([
                 LSTM(64, activation='relu', input_shape=(X_full.shape[1], X_full.shape[2])),
                 Dense(1)
@@ -152,11 +134,12 @@ if uploaded_file is not None:
             model_full.compile(optimizer='adam', loss='mse')
             
             with st.spinner(f"Training {algorithm_choice} model..."):
+                # Training the neural network
                 model_full.fit(X_full, y_full, epochs=50, batch_size=8, verbose=0)
             
             # Prediction on test set for metric calculation
-            if 'X_test' in locals() and len(X_test) > 0:
-                X_test_reshaped = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
+            if len(X_test) > 0:
+                X_test_reshaped = np.array(X_test).reshape(len(X_test), window_size, 1)
                 lstm_predictions_scaled = model_full.predict(X_test_reshaped, verbose=0)
                 lstm_predictions = scaler.inverse_transform(lstm_predictions_scaled)
                 
@@ -165,7 +148,7 @@ if uploaded_file is not None:
                 mse = mean_squared_error(actual_test_data, lstm_predictions)
                 rmse = np.sqrt(mse)
 
-            # Future forecasting
+            # Future forecasting (iterative prediction)
             last_seq_full = data_scaled_full[-window_size:]
             lstm_preds_full = []
             
@@ -173,6 +156,7 @@ if uploaded_file is not None:
                 input_seq_full = last_seq_full.reshape(1, window_size, 1)
                 pred_full = model_full.predict(input_seq_full, verbose=0)
                 lstm_preds_full.append(pred_full[0, 0])
+                # Shift the window: add the new prediction, drop the oldest value
                 last_seq_full = np.append(last_seq_full[1:], pred_full.reshape(1, 1), axis=0)
                 
             forecast_full = scaler.inverse_transform(np.array(lstm_preds_full).reshape(-1, 1)).flatten()
@@ -218,15 +202,16 @@ if uploaded_file is not None:
         ax.plot(years_future, forecast_full, label=forecast_label, linestyle='--', linewidth=2, color='#e74c3c') # Red/Orange
         
         # Highlight test period
-        if algorithm_choice != 'LSTM' or ('X_test' in locals() and len(X_test) > 0):
-             # Ensure test data plot only runs if test data is sufficiently large
+        is_test_data_plotted = False
+        if algorithm_choice != 'LSTM' or (len(test_data) > (window_size if algorithm_choice == 'LSTM' else 0)):
              if len(test_data) > (window_size if algorithm_choice == 'LSTM' else 0):
                 ax.plot(test_data.index.year, test_data['population'], label='Actual Test Data', linewidth=3, color='#2ecc71') # Green
+                is_test_data_plotted = True
 
         # Highlight extinction point if found
         if extinction_year:
             ax.axvline(extinction_year, color='darkred', linestyle=':', linewidth=2, label=f'Predicted Extinction: {extinction_year}')
-            ax.annotate(f'Extinction Year:\n{extinction_year}', 
+            ax.annotate(f'Extinction Year: {extinction_year}', 
                         (extinction_year, max(df['population']) * 0.9), 
                         textcoords="offset points", xytext=(-10,0), ha='right', color='darkred', fontsize=10)
 
@@ -245,16 +230,27 @@ if uploaded_file is not None:
         col_metric_1, col_metric_2, col_alert = st.columns([1, 1, 2])
         
         with col_metric_1:
-            st.metric(label="Mean Squared Error (MSE)", value=f"{mse:.2f}")
+            st.metric(
+                label="Mean Squared Error (MSE)", 
+                value=f"{mse:.2f}",
+                help="Measures the average squared difference between the actual population and the model's prediction. Formula: Sum((Actual - Forecast)^2) / N. A lower value indicates a better-fitting model."
+            )
         
         with col_metric_2:
-            st.metric(label="Root Mean Squared Error (RMSE)", value=f"{rmse:.2f}")
+            st.metric(
+                label="Root Mean Squared Error (RMSE)", 
+                value=f"{rmse:.2f}",
+                help="The square root of MSE. It is presented in the same units as the population count, making it easier to interpret the magnitude of the error. A lower value indicates higher prediction accuracy."
+            )
 
         with col_alert:
             if extinction_year:
-                st.error(f"⚠️ **CRITICAL FORECAST:** The model predicts population extinction in the year **{extinction_year}**.")
+                st.error(f"CRITICAL FORECAST: The model predicts population extinction in the year **{extinction_year}**.")
             else:
-                st.success(f"✅ **Positive Outlook:** The model did not predict extinction within the next {future_steps} years.")
+                st.success(f"Positive Outlook: The model did not predict extinction within the next {future_steps} years.")
+            
+            if is_test_data_plotted:
+                st.caption(f"Metrics (MSE, RMSE) were calculated based on the 20 percent **test data** portion of your file.")
 
         # --- Environmental Analysis Section ---
         st.markdown("---")
@@ -284,7 +280,7 @@ if uploaded_file is not None:
             with col_env_1:
                 st.metric(
                     label="Optimal Temperature", 
-                    value=f"{environmental_means['temperature']} °C",
+                    value=f"{environmental_means['temperature']} degrees Celsius",
                     delta="Average during thriving years"
                 )
             with col_env_2:
@@ -304,10 +300,10 @@ if uploaded_file is not None:
 
     except Exception as e:
         # Catch and display general errors clearly
-        st.error(f"An unexpected error occurred: {e}")
+        st.error(f"An unexpected error occurred during processing: {e}")
         st.exception(e)
 elif uploaded_file is None:
-    st.info("⬆️ Please upload a CSV file to begin the analysis. Required columns: `year`, `population`, `temperature`, `rainfall`, `habitat_index`.")
+    st.info("Please upload a CSV file to begin the analysis. Required columns: `year`, `population`, `temperature`, `rainfall`, `habitat_index`.")
     st.markdown("""
         **Example Data Structure:**
         | year | population | temperature | rainfall | habitat_index |
