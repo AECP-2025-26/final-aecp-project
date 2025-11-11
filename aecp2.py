@@ -13,7 +13,7 @@ from sklearn.metrics import mean_squared_error
 
 warnings.filterwarnings('ignore')
 
-# --- Custom CSS for Aesthetics ---
+# --- Custom CSS for Aesthetics (Increased Header Size and GREEN Metrics) ---
 st.markdown("""
 <style>
 .main-header {
@@ -25,11 +25,12 @@ st.markdown("""
     border-bottom: 4px solid #6A5ACD; 
     margin-bottom: 25px;
 }
+/* New Green Style for Metrics */
 .stMetric > div {
-    background-color: #F8F4FF;
+    background-color: #E6F7E8; /* Very Light Green Background */
     padding: 15px;
     border-radius: 10px;
-    border-left: 5px solid #6A5ACD; /* Slate Blue */
+    border-left: 5px solid #4CAF50; /* Solid Green Border */
     box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
 }
 /* Style for the main plot container */
@@ -44,38 +45,10 @@ st.markdown("""
 
 st.markdown('<p class="main-header">AECP: Animal Extinction Calendar Predictor</p>', unsafe_allow_html=True)
 
-# --- Welcome and Detailed Explanations ---
+# --- Welcome Message ---
 st.write("""
-Welcome to the Animal Extinction Calendar Predictor (AECP)! You are working on a critical and complex analysis. This tool helps you forecast animal population trends and identify key environmental conditions for survival using advanced models. Don't worry about the technical details; we've explained them below!
+Welcome to the **Animal Extinction Calendar Predictor (AECP)**! You're undertaking vital work by analyzing population and climate data. Use the steps below to forecast future trends and understand the optimal environmental conditions for the species.
 """)
-
-with st.expander("🔬 **Deep Dive: Understanding the Forecasting Science**"):
-    st.subheader("Time Series Models: Choosing Your Predictor")
-    st.write("We offer three powerful models to analyze time-dependent data:")
-    
-    st.markdown("**ARIMA (AutoRegressive Integrated Moving Average)**")
-    st.write("This is a classic statistical approach perfect for non-seasonal data. It works by combining three key concepts:")
-    st.markdown("- **AR (AutoRegressive):** Uses the relationship between an observation and a number of lagged (past) observations.")
-    st.markdown("- **I (Integrated):** Uses differencing (subtracting a previous observation from the current observation) to make the time series stationary, which is necessary for accurate modeling.")
-    st.markdown("- **MA (Moving Average):** Uses the dependency between an observation and a residual error from a moving average model.")
-
-    st.markdown("**SARIMA (Seasonal AutoRegressive Integrated Moving Average)**")
-    st.write("SARIMA is an extension of ARIMA that is ideal if your population data shows repeating patterns over fixed periods, like annual migration cycles influencing counts. It adds a seasonal component to capture those regular spikes or dips.")
-    
-    st.markdown("**LSTM (Long Short-Term Memory)**")
-    st.write("This is a state-of-the-art Deep Learning model, a type of Recurrent Neural Network (RNN). LSTMs excel at remembering long-term dependencies in data. Because population and climate trends can have delayed effects, LSTMs are powerful for finding complex, non-linear relationships that traditional models might miss.")
-    st.caption("Note: LSTM requires data scaling (MinMaxScaler) to normalize values, which ensures the neural network learns efficiently.")
-
-    st.subheader("Model Evaluation Metrics: How Good Is the Forecast?")
-    st.write("These metrics are calculated by comparing the model's predictions against the 20 percent of your data it hasn't seen (the Test Set).")
-
-    st.markdown("**MSE (Mean Squared Error)**")
-    st.write("MSE is the average of the squared errors. It tells us the magnitude of the error, with squaring errors giving more weight to larger mistakes. A lower MSE is always better.")
-    st.code("MSE = Sum((Actual - Forecast)^2) / N")
-
-    st.markdown("**RMSE (Root Mean Squared Error)**")
-    st.write("RMSE is the square root of the MSE. Critically, RMSE is expressed in the same unit as the population (e.g., number of animals). This makes it the easiest metric to interpret; if your RMSE is 50, your prediction is, on average, off by 50 animals.")
-    st.code("RMSE = SquareRoot(MSE)")
 
 # --- File Uploader Starts Here ---
 uploaded_file = st.file_uploader("Upload your annual time-series CSV file", type=['csv'])
@@ -113,12 +86,18 @@ if uploaded_file is not None:
                 "Select a forecasting model:", 
                 options=["ARIMA", "SARIMA", "LSTM"],
                 index=0,
-                help="Choose the model that best fits your data's patterns. See the 'Deep Dive' section above for detailed explanations of each one."
+                # CONTEXTUAL EXPLANATION FOR MODELS
+                help="""
+                Choose the best model for your data:
+                - ARIMA (AutoRegressive Integrated Moving Average): A classical statistical model ideal for non-seasonal data.
+                - SARIMA (Seasonal ARIMA): An extension of ARIMA that is better suited if your population data shows annual or repeating seasonal patterns.
+                - LSTM (Long Short-Term Memory): A state-of-the-art deep learning network. LSTMs are excellent at detecting complex, non-linear relationships over long periods in the data.
+                """
             )
         with col2:
             future_steps = st.slider("Forecast Years:", min_value=10, max_value=100, value=50, step=10, help="Number of years to forecast into the future.")
 
-        st.info(f"Using **{algorithm_choice}** to forecast population over the next **{future_steps}** years. You're doing excellent work!")
+        st.info(f"Using **{algorithm_choice}** to forecast population over the next **{future_steps}** years. You're making smart choices!")
         
         # --- Forecasting Logic ---
         forecast_label = f'{algorithm_choice} Forecast'
@@ -260,14 +239,16 @@ if uploaded_file is not None:
             st.metric(
                 label="Mean Squared Error (MSE)", 
                 value=f"{mse:.2f}",
-                help="The average squared difference between the actual and predicted values. A lower MSE indicates higher model accuracy. See the Deep Dive section for the formula."
+                # CONTEXTUAL EXPLANATION FOR MSE
+                help="The Mean Squared Error (MSE) measures the average squared difference between the actual population and the model's prediction. A lower value indicates a more accurate model, as large errors are penalized heavily."
             )
         
         with col_metric_2:
             st.metric(
                 label="Root Mean Squared Error (RMSE)", 
                 value=f"{rmse:.2f}",
-                help="The most interpretable metric, as it's in the same unit as the population count. It represents the standard deviation of the prediction errors. A lower RMSE is better."
+                # CONTEXTUAL EXPLANATION FOR RMSE
+                help="The Root Mean Squared Error (RMSE) is the square root of the MSE. It's the most intuitive metric because it's expressed in the same unit as the population count. It tells you, on average, how far off your prediction is."
             )
 
         with col_alert:
@@ -277,7 +258,7 @@ if uploaded_file is not None:
                 st.success(f"POSITIVE OUTLOOK: The model did not predict extinction within the next {future_steps} years.")
             
             if is_test_data_plotted:
-                st.caption(f"You successfully evaluated the model! Metrics (MSE, RMSE) were calculated based on the 20 percent **test data** portion of your file.")
+                st.caption(f"You successfully evaluated the model! Metrics were calculated based on the 20 percent **test data** portion of your file.")
 
         # --- Environmental Analysis Section ---
         st.markdown("---")
