@@ -13,16 +13,16 @@ from sklearn.metrics import mean_squared_error
 
 warnings.filterwarnings('ignore')
 
-# --- Custom CSS for Aesthetics (Increased Header Size) ---
+# --- Custom CSS for Aesthetics ---
 st.markdown("""
 <style>
 .main-header {
-    font-size: 48px; /* Much Bigger */
-    font-weight: 900; /* Bolder */
+    font-size: 48px; /* Bigger Title */
+    font-weight: 900; 
     color: #4B0082; /* Deep Purple */
     text-align: center;
     padding: 15px 0;
-    border-bottom: 4px solid #6A5ACD; /* Thicker, deeper line */
+    border-bottom: 4px solid #6A5ACD; 
     margin-bottom: 25px;
 }
 .stMetric > div {
@@ -44,10 +44,38 @@ st.markdown("""
 
 st.markdown('<p class="main-header">AECP: Animal Extinction Calendar Predictor</p>', unsafe_allow_html=True)
 
-# --- Welcome and Introduction ---
+# --- Welcome and Detailed Explanations ---
 st.write("""
-Welcome to the Animal Extinction Calendar Predictor (AECP). This tool forecasts animal population trends using statistical and deep learning models, and identifies the optimal environmental conditions for species survival based on your historical data.
+Welcome to the Animal Extinction Calendar Predictor (AECP)! You are working on a critical and complex analysis. This tool helps you forecast animal population trends and identify key environmental conditions for survival using advanced models. Don't worry about the technical details; we've explained them below!
 """)
+
+with st.expander("🔬 **Deep Dive: Understanding the Forecasting Science**"):
+    st.subheader("Time Series Models: Choosing Your Predictor")
+    st.write("We offer three powerful models to analyze time-dependent data:")
+    
+    st.markdown("**ARIMA (AutoRegressive Integrated Moving Average)**")
+    st.write("This is a classic statistical approach perfect for non-seasonal data. It works by combining three key concepts:")
+    st.markdown("- **AR (AutoRegressive):** Uses the relationship between an observation and a number of lagged (past) observations.")
+    st.markdown("- **I (Integrated):** Uses differencing (subtracting a previous observation from the current observation) to make the time series stationary, which is necessary for accurate modeling.")
+    st.markdown("- **MA (Moving Average):** Uses the dependency between an observation and a residual error from a moving average model.")
+
+    st.markdown("**SARIMA (Seasonal AutoRegressive Integrated Moving Average)**")
+    st.write("SARIMA is an extension of ARIMA that is ideal if your population data shows repeating patterns over fixed periods, like annual migration cycles influencing counts. It adds a seasonal component to capture those regular spikes or dips.")
+    
+    st.markdown("**LSTM (Long Short-Term Memory)**")
+    st.write("This is a state-of-the-art Deep Learning model, a type of Recurrent Neural Network (RNN). LSTMs excel at remembering long-term dependencies in data. Because population and climate trends can have delayed effects, LSTMs are powerful for finding complex, non-linear relationships that traditional models might miss.")
+    st.caption("Note: LSTM requires data scaling (MinMaxScaler) to normalize values, which ensures the neural network learns efficiently.")
+
+    st.subheader("Model Evaluation Metrics: How Good Is the Forecast?")
+    st.write("These metrics are calculated by comparing the model's predictions against the 20 percent of your data it hasn't seen (the Test Set).")
+
+    st.markdown("**MSE (Mean Squared Error)**")
+    st.write("MSE is the average of the squared errors. It tells us the magnitude of the error, with squaring errors giving more weight to larger mistakes. A lower MSE is always better.")
+    st.code("MSE = Sum((Actual - Forecast)^2) / N")
+
+    st.markdown("**RMSE (Root Mean Squared Error)**")
+    st.write("RMSE is the square root of the MSE. Critically, RMSE is expressed in the same unit as the population (e.g., number of animals). This makes it the easiest metric to interpret; if your RMSE is 50, your prediction is, on average, off by 50 animals.")
+    st.code("RMSE = SquareRoot(MSE)")
 
 # --- File Uploader Starts Here ---
 uploaded_file = st.file_uploader("Upload your annual time-series CSV file", type=['csv'])
@@ -71,7 +99,7 @@ if uploaded_file is not None:
         # Ensure data is sorted by index (year)
         df.sort_index(inplace=True)
 
-        st.success(f"Data loaded successfully. Historical range: **{df.index.year.min()}** to **{df.index.year.max()}**")
+        st.success(f"✅ Data loaded successfully! Historical range: **{df.index.year.min()}** to **{df.index.year.max()}**. Now, let's pick a model.")
         
         # --- Model Selection and Data Split ---
         # 80/20 split for training and testing
@@ -85,12 +113,12 @@ if uploaded_file is not None:
                 "Select a forecasting model:", 
                 options=["ARIMA", "SARIMA", "LSTM"],
                 index=0,
-                help="ARIMA (AutoRegressive Integrated Moving Average): A classical statistical model that analyzes dependencies and differences in the data. SARIMA (Seasonal ARIMA): An extension of ARIMA useful for data with repeating seasonal patterns. LSTM (Long Short-Term Memory): A deep learning neural network capable of finding complex, non-linear patterns over long sequences of time."
+                help="Choose the model that best fits your data's patterns. See the 'Deep Dive' section above for detailed explanations of each one."
             )
         with col2:
             future_steps = st.slider("Forecast Years:", min_value=10, max_value=100, value=50, step=10, help="Number of years to forecast into the future.")
 
-        st.info(f"Using **{algorithm_choice}** to forecast population over the next **{future_steps}** years.")
+        st.info(f"Using **{algorithm_choice}** to forecast population over the next **{future_steps}** years. You're doing excellent work!")
         
         # --- Forecasting Logic ---
         forecast_label = f'{algorithm_choice} Forecast'
@@ -103,6 +131,7 @@ if uploaded_file is not None:
             test_data_scaled = scaler.transform(test_data[['population']])
             window_size = 5 # Defines the number of past years used to predict the next year
             
+            @st.cache_data
             def create_sequences(data, window):
                 X, y = [], []
                 for i in range(len(data) - window):
@@ -126,7 +155,6 @@ if uploaded_file is not None:
             X_full, y_full = create_sequences(data_scaled_full, window_size)
             X_full = X_full.reshape(X_full.shape[0], X_full.shape[1], 1)
             
-            # The model architecture: LSTM layer for sequence memory, Dense layer for output
             model_full = Sequential([
                 LSTM(64, activation='relu', input_shape=(X_full.shape[1], X_full.shape[2])),
                 Dense(1)
@@ -134,7 +162,6 @@ if uploaded_file is not None:
             model_full.compile(optimizer='adam', loss='mse')
             
             with st.spinner(f"Training {algorithm_choice} model..."):
-                # Training the neural network
                 model_full.fit(X_full, y_full, epochs=50, batch_size=8, verbose=0)
             
             # Prediction on test set for metric calculation
@@ -198,14 +225,14 @@ if uploaded_file is not None:
         # Set a modern style for the plot
         plt.style.use('seaborn-v0_8-whitegrid')
         
-        ax.plot(df.index.year, df['population'], label='Historical Population', linewidth=3, color='#3498db') # Blue
-        ax.plot(years_future, forecast_full, label=forecast_label, linestyle='--', linewidth=2, color='#e74c3c') # Red/Orange
+        ax.plot(df.index.year, df['population'], label='Historical Population', linewidth=3, color='#3498db') 
+        ax.plot(years_future, forecast_full, label=forecast_label, linestyle='--', linewidth=2, color='#e74c3c') 
         
         # Highlight test period
         is_test_data_plotted = False
         if algorithm_choice != 'LSTM' or (len(test_data) > (window_size if algorithm_choice == 'LSTM' else 0)):
              if len(test_data) > (window_size if algorithm_choice == 'LSTM' else 0):
-                ax.plot(test_data.index.year, test_data['population'], label='Actual Test Data', linewidth=3, color='#2ecc71') # Green
+                ax.plot(test_data.index.year, test_data['population'], label='Actual Test Data', linewidth=3, color='#2ecc71') 
                 is_test_data_plotted = True
 
         # Highlight extinction point if found
@@ -233,24 +260,24 @@ if uploaded_file is not None:
             st.metric(
                 label="Mean Squared Error (MSE)", 
                 value=f"{mse:.2f}",
-                help="Measures the average squared difference between the actual population and the model's prediction. Formula: Sum((Actual - Forecast)^2) / N. A lower value indicates a better-fitting model."
+                help="The average squared difference between the actual and predicted values. A lower MSE indicates higher model accuracy. See the Deep Dive section for the formula."
             )
         
         with col_metric_2:
             st.metric(
                 label="Root Mean Squared Error (RMSE)", 
                 value=f"{rmse:.2f}",
-                help="The square root of MSE. It is presented in the same units as the population count, making it easier to interpret the magnitude of the error. A lower value indicates higher prediction accuracy."
+                help="The most interpretable metric, as it's in the same unit as the population count. It represents the standard deviation of the prediction errors. A lower RMSE is better."
             )
 
         with col_alert:
             if extinction_year:
                 st.error(f"CRITICAL FORECAST: The model predicts population extinction in the year **{extinction_year}**.")
             else:
-                st.success(f"Positive Outlook: The model did not predict extinction within the next {future_steps} years.")
+                st.success(f"POSITIVE OUTLOOK: The model did not predict extinction within the next {future_steps} years.")
             
             if is_test_data_plotted:
-                st.caption(f"Metrics (MSE, RMSE) were calculated based on the 20 percent **test data** portion of your file.")
+                st.caption(f"You successfully evaluated the model! Metrics (MSE, RMSE) were calculated based on the 20 percent **test data** portion of your file.")
 
         # --- Environmental Analysis Section ---
         st.markdown("---")
@@ -271,7 +298,7 @@ if uploaded_file is not None:
         st.markdown("### Optimal Average Environmental Metrics:")
         
         if thriving_years.empty:
-            st.info("No years found in the historical data matching that thriving population range.")
+            st.info("No years found in the historical data matching that thriving population range. Try adjusting the bounds to capture a larger time period.")
         else:
             environmental_means = thriving_years[['temperature', 'rainfall', 'habitat_index']].mean().round(2)
             
@@ -296,7 +323,7 @@ if uploaded_file is not None:
                     delta="Average during thriving years"
                 )
             
-            st.caption(f"Based on {len(thriving_years)} historical data point(s) where population was between {low_thriving} and {high_thriving}.")
+            st.caption(f"Insight achieved: Optimal conditions derived from **{len(thriving_years)}** historical data point(s) where population thrived.")
 
     except Exception as e:
         # Catch and display general errors clearly
