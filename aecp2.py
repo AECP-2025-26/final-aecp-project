@@ -13,17 +13,17 @@ from sklearn.metrics import mean_squared_error
 
 warnings.filterwarnings('ignore')
 
-# --- Custom CSS for Aesthetics ---
+# --- Custom CSS for Aesthetics (Increased Header Size) ---
 st.markdown("""
 <style>
 .main-header {
-    font-size: 32px;
-    font-weight: 700;
+    font-size: 48px; /* Much Bigger */
+    font-weight: 900; /* Bolder */
     color: #4B0082; /* Deep Purple */
     text-align: center;
-    padding: 10px 0;
-    border-bottom: 2px solid #E0E0E0;
-    margin-bottom: 20px;
+    padding: 15px 0;
+    border-bottom: 4px solid #6A5ACD; /* Thicker, deeper line */
+    margin-bottom: 25px;
 }
 .stMetric > div {
     background-color: #F8F4FF;
@@ -44,6 +44,29 @@ st.markdown("""
 
 st.markdown('<p class="main-header">Population Time Series Forecasting & Environmental Analysis</p>', unsafe_allow_html=True)
 
+# --- Welcome and Introduction ---
+st.write("""
+Welcome to the Time Series Analyst! This application allows you to forecast population trends based on historical data and analyze the environmental conditions (temperature, rainfall, habitat index) that correlate with periods of high population.
+""")
+
+with st.expander("📚 **Learn the Science: Technical Terms Explained**"):
+    st.markdown("""
+    ### Time Series Forecasting Models
+    Time series data is indexed by time (like annual data). Forecasting predicts future values based on past observations.
+
+    * **ARIMA (AutoRegressive Integrated Moving Average):** A statistical model that looks at dependencies between an observation and a number of lagged observations (AR component), the difference between raw observations to make the series stationary (I component), and the dependency between an observation and a residual error from a moving average model (MA component).
+    * **SARIMA (Seasonal AutoRegressive Integrated Moving Average):** An extension of ARIMA that explicitly supports the modeling of time series data with a seasonal component (like monthly or quarterly data), although here we treat the annual data simply.
+    * **LSTM (Long Short-Term Memory):** A specialized type of Recurrent Neural Network (RNN) in deep learning. LSTMs are designed to remember sequential information over long periods, making them highly effective for complex, non-linear time series patterns.
+
+    ### Data Processing & Evaluation Metrics
+    * **MinMaxScaler:** A data transformation technique that scales features to a fixed range, typically 0 to 1. This is crucial for Neural Networks like LSTM to prevent features with larger values from dominating the learning process.
+    * **MSE (Mean Squared Error):** A common metric to measure the quality of a forecast. It calculates the average of the squares of the errors (the difference between the actual value and the predicted value). Lower MSE is better.
+    $$MSE = \frac{1}{n}\sum_{t=1}^{n} (A_t - F_t)^2$$
+    * **RMSE (Root Mean Squared Error):** The square root of the MSE. It has the same units as the forecasted quantity (e.g., population count), making it easier to interpret than MSE. Lower RMSE is better.
+    $$RMSE = \sqrt{MSE}$$
+    """)
+
+# --- File Uploader Starts Here ---
 uploaded_file = st.file_uploader("Upload your annual time-series CSV file", type=['csv'])
 
 if uploaded_file is not None:
@@ -68,6 +91,7 @@ if uploaded_file is not None:
         st.success(f"✅ Data loaded successfully. Historical range: **{df.index.year.min()}** to **{df.index.year.max()}**")
         
         # --- Model Selection and Data Split ---
+        # 80/20 split for training and testing
         train_size = int(len(df) * 0.8)
         train_data, test_data = df.iloc[:train_size], df.iloc[train_size:]
         
@@ -195,7 +219,9 @@ if uploaded_file is not None:
         
         # Highlight test period
         if algorithm_choice != 'LSTM' or ('X_test' in locals() and len(X_test) > 0):
-             ax.plot(test_data.index.year, test_data['population'], label='Actual Test Data', linewidth=3, color='#2ecc71') # Green
+             # Ensure test data plot only runs if test data is sufficiently large
+             if len(test_data) > (window_size if algorithm_choice == 'LSTM' else 0):
+                ax.plot(test_data.index.year, test_data['population'], label='Actual Test Data', linewidth=3, color='#2ecc71') # Green
 
         # Highlight extinction point if found
         if extinction_year:
