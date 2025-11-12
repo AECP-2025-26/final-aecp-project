@@ -24,7 +24,8 @@ st.markdown("""
     border-bottom: 4px solid #85F341; 
     margin-bottom: 25px;
 }
-
+</style>
+""", unsafe_allow_html=True)
 # === File Upload ===
 uploaded_file = st.file_uploader("Upload your CSV file", type=['csv'])
 if uploaded_file is not None:
