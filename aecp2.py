@@ -13,7 +13,6 @@ from sklearn.metrics import mean_squared_error
 
 warnings.filterwarnings('ignore')
 
-# --- Custom CSS for Aesthetics (Increased Header Size and GREEN Metrics) ---
 st.markdown("""
 <style>
 .main-header {
@@ -28,8 +27,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 st.markdown('<p class="main-header">AECP: Animal Extinction Calendar Predictor</p>', unsafe_allow_html=True)
-
-# --- Welcome Message ---
+#Wikipedia Definitions
 st.write("Hi! Since you're already familiar with the project's overview, let's dive into the Data Science aspect of AECP. This application uses an extensive, pre-processed dataset containing up to 250 years of population, habitat, deforestation, and rainfall index data. The libraries Scikit-learn and Statsmodels use this data to predict future population. You'll see this visualized with a polynomial regression curve on the graphs. Critically, the app's interactive component, powered by Streamlit, allows you to modify model hyperparameters. By changing these, you instantly generate new forecast scenarios, letting you see how conservation efforts (like reducing the decline rate by 75%) directly shift the projected extinction date. \n\n Here are the full forms and meanings of a few important terms: ")
 st.write("ARIMA: Autoregressive integrated moving average, and SARIMA: Seasonal Autoregressive integrated moving average. The autoregressive (AR) part of ARIMA indicates that the evolving variable of interest is regressed on its prior values. The moving average (MA) part indicates that the regression error is a linear combination of error terms whose values occurred contemporaneously and at various times in the past. The integrated (I) part indicates that the data values have been replaced with the difference between each value and the previous value.")
 st.write("LSTM stands for Long Short-Term Memory. It's a type of recurrent neural network designed to capture long-term dependencies in sequential data, making it ideal for tasks such as time series forecasting and analysis.") 
@@ -37,7 +35,7 @@ st.write("The Mean Squared Error (MSE) is calculated by taking the average of th
 st.write("The Root Mean Squared Error (RMSE) is the square root of the MSE, translating the error back into the original units of measurement. This makes RMSE the standard evaluation metric for users, as it clearly represents the average or typical magnitude of the error the model makes, providing an easily understood measure of accuracy.")
 st.write("The Habitat Index measures the proportion of suitable habitats for a country's species that remain intact, relative to a baseline set in the year 2001.")
 
-# --- Data Generation Function (Now parameterized) ---
+# Synthetic Data function (imported)
 @st.cache_data
 def generate_custom_data(start_year, num_years, initial_pop, decline_rate):
     """Generates synthetic time-series data based on user-defined parameters."""
@@ -69,7 +67,6 @@ def generate_custom_data(start_year, num_years, initial_pop, decline_rate):
     })
     return df
 
-# --- File Selection Logic Starts Here ---
 st.subheader("1. Data Source Selection")
 
 data_source_choice = st.radio(
@@ -125,12 +122,10 @@ elif data_source_choice == "Upload My Own CSV":
             st.error(f"Error reading uploaded file: {e}")
             df = None
             
-# --- Main Analysis Block ---
 if df is not None:
     try:
         st.subheader("2. Data Preprocessing and Validation")
         
-        # --- Data Preprocessing ---
         df['year'] = pd.to_datetime(df['year'], format='%Y', errors='coerce')
         df.dropna(subset=['year'], inplace=True)
         df.set_index('year', inplace=True)
@@ -317,15 +312,15 @@ if df is not None:
         # --- Results and Metrics ---
         st.markdown("---")
         st.subheader("Model Performance and Outlook")
-
+        min_pop, max_pop = int(df['population'].min()), int(df['population'].max())
         col_metric_1, col_metric_2, col_alert = st.columns([1, 1, 2])
-        
+        acc= mse/min_pop
         with col_metric_1:
             st.metric(
-                label="Mean Squared Error (MSE)", 
-                value=f"{mse:.2f}",
+                label="Scaled Loss Accuracy", 
+                value=f"{acc:.2f}",
                 # CONTEXTUAL EXPLANATION FOR MSE
-                help="The Mean Squared Error (MSE) measures the average squared difference between the actual population and the model's prediction. A lower value indicates a more accurate model, as large errors are penalized heavily."
+                help="The scaled loss accuracy serves as an error metric that reduces the typical prediction error of RMSE by the size of the dataset. Its main function is to create an extremely small numerical value used as a loss function, which can improve numerical stability in specialized model training environments."
             )
         
         with col_metric_2:
