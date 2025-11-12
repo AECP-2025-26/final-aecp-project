@@ -28,7 +28,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<p class="main-header">AECP: Animal Extinction Calendar Predictor</p>', unsafe_allow_html=True)
-st.write("Hi!")
+st.write("Hi!Since you're already familiar with the project's non-technical overview, let's dive into the Data Science core of the Extinction Calendar. This application uses an extensive, pre-processed dataset containing up to 250 years of population, habitat, deforestation, and rainfall index data. The key is the machine learning pipeline: Scikit-learn and Statsmodels regression algorithms fit this historical data to predict future population curves. You'll see this visualized with a polynomial regression curve on the graphs. Critically, the app's interactive component, powered by Streamlit, allows you to modify model hyperparameters. By changing these, you instantly generate new forecast scenarios, letting you see how conservation efforts (like reducing the decline rate by 75%) directly shift the projected extinction date.")
 # === File Upload ===
 uploaded_file = st.file_uploader("Upload your CSV file", type=['csv'])
 if uploaded_file is not None:
