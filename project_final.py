@@ -33,6 +33,7 @@ st.write("ARIMA: Autoregressive integrated moving average, and SARIMA: Seasonal 
 st.write("LSTM stands for Long Short-Term Memory. It's a type of recurrent neural network designed to capture long-term dependencies in sequential data, making it ideal for tasks such as time series forecasting and analysis.") 
 st.write("The Mean Squared Error (MSE) is calculated by taking the average of the squared prediction errors. It serves as the loss function used internally during model training, where squaring the errors helps the learning algorithm focus on reducing large mistakes and outliers.")
 st.write("The Root Mean Squared Error (RMSE) is the square root of the MSE, translating the error back into the original units of measurement. This makes RMSE the standard evaluation metric for users, as it clearly represents the average or typical magnitude of the error the model makes, providing an easily understood measure of accuracy.")
+st.write("The Habitat Index measures the proportion of suitable habitats for a country's species that remain intact, relative to a baseline set in the year 2001.")
 # === File Upload ===
 uploaded_file = st.file_uploader("Upload your CSV file", type=['csv'])
 if uploaded_file is not None:
