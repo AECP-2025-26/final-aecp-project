@@ -25,14 +25,17 @@ st.markdown("""
     border-bottom: 4px solid #6A5ACD; 
     margin-bottom: 25px;
 }
-/* New Green Style for Metrics - Text color added for visibility */
+/* New Green Style for Metrics - Text color forced dark for maximum visibility in Dark Mode */
 .stMetric > div {
     background-color: #E6F7E8; /* Very Light Green Background */
     padding: 15px;
     border-radius: 10px;
     border-left: 5px solid #4CAF50; /* Solid Green Border */
     box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
-    color: #333333; /* Explicitly set text color to dark gray for contrast */
+}
+/* Force ALL text inside the stMetric component to be black/dark for contrast */
+.stMetric > div * {
+    color: #000000 !important;
 }
 /* Style for the main plot container */
 .stPlot > div {
