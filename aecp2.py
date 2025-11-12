@@ -317,10 +317,10 @@ if df is not None:
         acc= mse/min_pop
         with col_metric_1:
             st.metric(
-                label="Scaled Loss Accuracy", 
+                label="Scaled Loss Factor", 
                 value=f"{acc:.2f}",
-                # CONTEXTUAL EXPLANATION FOR MSE
-                help="The scaled loss accuracy serves as an error metric that reduces the typical prediction error of RMSE by the size of the dataset. Its main function is to create an extremely small numerical value used as a loss function, which can improve numerical stability in specialized model training environments."
+                
+                help="The scaled loss factor serves as an error metric that reduces the typical prediction error of RMSE by the size of the dataset. Its main function is to create an extremely small numerical value used as a loss function, which can improve numerical stability in specialized model training environments."
             )
         
         with col_metric_2:
