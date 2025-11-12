@@ -57,12 +57,71 @@ st.write("The Mean Squared Error (MSE) is calculated by taking the average of th
 st.write("The Root Mean Squared Error (RMSE) is the square root of the MSE, translating the error back into the original units of measurement. This makes RMSE the standard evaluation metric for users, as it clearly represents the average or typical magnitude of the error the model makes, providing an easily understood measure of accuracy.")
 st.write("The Habitat Index measures the proportion of suitable habitats for a country's species that remain intact, relative to a baseline set in the year 2001.")
 
-# --- File Uploader Starts Here ---
-uploaded_file = st.file_uploader("Upload your annual time-series CSV file", type=['csv'])
+# --- Mock Preloaded Data Generation (Replace this with actual file loading if possible) ---
+# NOTE: If you have an actual CSV file named 'preloaded_data.csv' in your repository,
+# you would replace the logic inside this function with:
+# return pd.read_csv('preloaded_data.csv')
 
-if uploaded_file is not None:
+@st.cache_data
+def generate_mock_data():
+    """Generates synthetic time-series data for demonstration."""
+    years = np.arange(1950, 2025)
+    
+    # Population trend (declining with some noise)
+    population_base = 5000 - 40 * (years - 1950)
+    population_noise = np.random.normal(0, 150, len(years))
+    population = np.maximum(50, population_base + population_noise) # Ensure population doesn't go below 50
+
+    # Environmental factors (mock data)
+    temperature = 10 + 0.1 * (years - 1950) + np.random.normal(0, 0.5, len(years))
+    rainfall = 1000 - 5 * (years - 1950) + np.random.normal(0, 50, len(years))
+    # Habitat index (declining from 1.0)
+    habitat_index = 1.0 - 0.005 * (years - 1950) + np.random.normal(0, 0.05, len(years))
+    habitat_index = np.clip(habitat_index, 0.1, 1.0) # Clip between 0.1 and 1.0
+
+    df = pd.DataFrame({
+        'year': years,
+        'population': population.astype(int),
+        'temperature': temperature.round(1),
+        'rainfall': rainfall.astype(int),
+        'habitat_index': habitat_index.round(2)
+    })
+    return df
+
+# --- File Selection Logic Starts Here ---
+st.subheader("1. Data Source Selection")
+
+data_source_choice = st.radio(
+    "How would you like to load your data?",
+    options=["Use Preloaded Sample Data", "Upload My Own CSV"],
+    index=0,
+    help="Use the preloaded data to see the app in action immediately, or upload your own time-series data."
+)
+
+df = None
+
+if data_source_choice == "Use Preloaded Sample Data":
+    df = generate_mock_data()
+    st.success("✅ Preloaded Sample Data loaded.")
+
+elif data_source_choice == "Upload My Own CSV":
+    uploaded_file = st.file_uploader(
+        "Upload your annual time-series CSV file", 
+        type=['csv'],
+        help="The CSV must contain columns: `year`, `population`, `temperature`, `rainfall`, `habitat_index`."
+    )
+    if uploaded_file is not None:
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.success("✅ Custom CSV file loaded successfully!")
+        except Exception as e:
+            st.error(f"Error reading uploaded file: {e}")
+            df = None
+            
+# --- Main Analysis Block ---
+if df is not None:
     try:
-        df = pd.read_csv(uploaded_file)
+        st.subheader("2. Data Preprocessing and Validation")
         
         # --- Data Preprocessing ---
         df['year'] = pd.to_datetime(df['year'], format='%Y', errors='coerce')
@@ -79,9 +138,11 @@ if uploaded_file is not None:
         # Ensure data is sorted by index (year)
         df.sort_index(inplace=True)
 
-        st.success(f"✅ Data loaded successfully! Historical range: **{df.index.year.min()}** to **{df.index.year.max()}**. Now, let's pick a model.")
+        st.info(f"Historical range: **{df.index.year.min()}** to **{df.index.year.max()}**. Total data points: **{len(df)}**.")
         
         # --- Model Selection and Data Split ---
+        st.subheader("3. Model Configuration and Forecasting")
+        
         # 80/20 split for training and testing
         train_size = int(len(df) * 0.8)
         train_data, test_data = df.iloc[:train_size], df.iloc[train_size:]
@@ -109,13 +170,13 @@ if uploaded_file is not None:
         # --- Forecasting Logic ---
         forecast_label = f'{algorithm_choice} Forecast'
         rmse, mse = 0, 0
-        
+        window_size = 5 # Default window size for LSTM
+
         if algorithm_choice == 'LSTM':
             # LSTM requires data normalization (MinMaxScaler) and sequence creation
             scaler = MinMaxScaler()
             train_data_scaled = scaler.fit_transform(train_data[['population']])
             test_data_scaled = scaler.transform(test_data[['population']])
-            window_size = 5 # Defines the number of past years used to predict the next year
             
             @st.cache_data
             def create_sequences(data, window):
@@ -128,12 +189,12 @@ if uploaded_file is not None:
             # Create sequences for training and testing
             X_train, y_train = create_sequences(train_data_scaled, window_size)
             
+            X_test, y_test = [], []
             if len(test_data_scaled) > window_size:
                 X_test, y_test = create_sequences(test_data_scaled, window_size)
             else:
                 st.warning(f"Test data size ({len(test_data_scaled)}) is too small for a window size of {window_size}. Skipping test set evaluation.")
-                X_test = [] 
-                
+            
             X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
 
             # Build and train the model on the full data for future prediction
@@ -176,23 +237,27 @@ if uploaded_file is not None:
 
         elif algorithm_choice == 'ARIMA':
             with st.spinner(f"Fitting {algorithm_choice} model..."):
+                # Fit on training data for evaluation
                 arima_model = ARIMA(train_data['population'], order=(3,1,1)).fit()
                 arima_forecast_test = arima_model.forecast(steps=len(test_data))
                 
                 mse = mean_squared_error(test_data['population'], arima_forecast_test)
                 rmse = np.sqrt(mse)
                 
+                # Fit on full data for future forecast
                 arima_model_full = ARIMA(df['population'], order=(3,1,1)).fit()
                 forecast_full = arima_model_full.forecast(steps=future_steps).values
 
         elif algorithm_choice == 'SARIMA':
             with st.spinner(f"Fitting {algorithm_choice} model..."):
+                # Fit on training data for evaluation
                 sarima_model = SARIMAX(train_data['population'], order=(1,1,1), seasonal_order=(0,0,0,0)).fit(disp=False)
                 sarima_forecast_test = sarima_model.forecast(steps=len(test_data))
                 
                 mse = mean_squared_error(test_data['population'], sarima_forecast_test)
                 rmse = np.sqrt(mse)
                 
+                # Fit on full data for future forecast
                 sarima_model_full = SARIMAX(df['population'], order=(1,1,1), seasonal_order=(0,0,0,0)).fit(disp=False)
                 forecast_full = sarima_model_full.forecast(steps=future_steps).values
 
@@ -204,6 +269,7 @@ if uploaded_file is not None:
                 break
 
         # --- Plotting ---
+        st.subheader("4. Forecast Visualization")
         years_future = np.arange(df.index.year.max() + 1, df.index.year.max() + 1 + future_steps)
         
         fig, ax = plt.subplots(figsize=(12, 6))
@@ -218,8 +284,8 @@ if uploaded_file is not None:
         is_test_data_plotted = False
         if algorithm_choice != 'LSTM' or (len(test_data) > (window_size if algorithm_choice == 'LSTM' else 0)):
              if len(test_data) > (window_size if algorithm_choice == 'LSTM' else 0):
-                ax.plot(test_data.index.year, test_data['population'], label='Actual Test Data', linewidth=3, color='#2ecc71') 
-                is_test_data_plotted = True
+                 ax.plot(test_data.index.year, test_data['population'], label='Actual Test Data', linewidth=3, color='#2ecc71') 
+                 is_test_data_plotted = True
 
         # Highlight extinction point if found
         if extinction_year:
@@ -269,7 +335,7 @@ if uploaded_file is not None:
 
         # --- Environmental Analysis Section ---
         st.markdown("---")
-        st.subheader("Environmental Analysis: Identifying Thriving Conditions")
+        st.subheader("5. Environmental Analysis: Identifying Thriving Conditions")
         
         min_pop, max_pop = int(df['population'].min()), int(df['population'].max())
         
@@ -315,9 +381,11 @@ if uploaded_file is not None:
 
     except Exception as e:
         # Catch and display general errors clearly
-        st.error(f"An unexpected error occurred during processing: {e}")
+        st.error(f"An unexpected error occurred during processing. Please check the format of your uploaded CSV.")
         st.exception(e)
-elif uploaded_file is None:
+        
+# --- Initial Message if no data is loaded yet ---
+if df is None and data_source_choice == "Upload My Own CSV":
     st.info("Please upload a CSV file to begin the analysis. Required columns: `year`, `population`, `temperature`, `rainfall`, `habitat_index`.")
     st.markdown("""
         **Example Data Structure:**
