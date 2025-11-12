@@ -17,36 +17,16 @@ warnings.filterwarnings('ignore')
 st.markdown("""
 <style>
 .main-header {
-    font-size: 48px; /* Bigger Title */
+    font-size: 96px; 
     font-weight: 900; 
-    color: #4B0082; /* Deep Purple */
+    color: #57CA0F; 
     text-align: center;
     padding: 15px 0;
-    border-bottom: 4px solid #6A5ACD; 
+    border-bottom: 4px solid #85F341; 
     margin-bottom: 25px;
-}
-/* New Green Style for Metrics - Text color forced dark for maximum visibility in Dark Mode */
-.stMetric > div {
-    background-color: #E6F7E8; /* Very Light Green Background */
-    padding: 15px;
-    border-radius: 10px;
-    border-left: 5px solid #4CAF50; /* Solid Green Border */
-    box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
-}
-/* Force ALL text inside the stMetric component to be black/dark for contrast */
-.stMetric > div * {
-    color: #000000 !important;
-}
-/* Style for the main plot container */
-.stPlot > div {
-    border-radius: 12px;
-    padding: 20px;
-    background-color: #FFFFFF;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 </style>
 """, unsafe_allow_html=True)
-
 st.markdown('<p class="main-header">AECP: Animal Extinction Calendar Predictor</p>', unsafe_allow_html=True)
 
 # --- Welcome Message ---
