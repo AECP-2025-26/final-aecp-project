@@ -17,21 +17,22 @@ warnings.filterwarnings('ignore')
 st.markdown("""
 <style>
 .main-header {
-    font-size: 96px; 
+    font-size: 48px; /* Bigger Title */
     font-weight: 900; 
-    color: #57CA0F; 
+    color: #4B0082; /* Deep Purple */
     text-align: center;
     padding: 15px 0;
-    border-bottom: 4px solid #85F341; 
+    border-bottom: 4px solid #6A5ACD; 
     margin-bottom: 25px;
 }
-/* New Green Style for Metrics */
+/* New Green Style for Metrics - Text color added for visibility */
 .stMetric > div {
     background-color: #E6F7E8; /* Very Light Green Background */
     padding: 15px;
     border-radius: 10px;
     border-left: 5px solid #4CAF50; /* Solid Green Border */
     box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
+    color: #333333; /* Explicitly set text color to dark gray for contrast */
 }
 /* Style for the main plot container */
 .stPlot > div {
@@ -47,7 +48,7 @@ st.markdown('<p class="main-header">AECP: Animal Extinction Calendar Predictor</
 
 # --- Welcome Message ---
 st.write("""
-Welcome to the **Animal Extinction Calendar Predictor (AECP)**! The purpose of this app is analyzing population and climate data. Use the steps below to forecast future trends and understand the optimal environmental conditions for the species.
+Welcome to the **Animal Extinction Calendar Predictor (AECP)**! You're undertaking vital work by analyzing population and climate data. Use the steps below to forecast future trends and understand the optimal environmental conditions for the species.
 """)
 
 # --- File Uploader Starts Here ---
@@ -239,8 +240,7 @@ if uploaded_file is not None:
             st.metric(
                 label="Mean Squared Error (MSE)", 
                 value=f"{mse:.2f}",
-                delta=None, 
-                delta_color="normal",
+                # CONTEXTUAL EXPLANATION FOR MSE
                 help="The Mean Squared Error (MSE) measures the average squared difference between the actual population and the model's prediction. A lower value indicates a more accurate model, as large errors are penalized heavily."
             )
         
