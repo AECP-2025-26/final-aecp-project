@@ -413,6 +413,34 @@ if df is not None:
             
             st.caption(f"Insight achieved: Optimal conditions derived from **{len(thriving_years)}** historical data point(s) where population thrived.")
 
+
+        # --- NEW SECTION: Independent Variable Trends (Section 6) ---
+        st.markdown("---")
+        st.subheader("6. Environmental Variable Trends")
+
+        # Create a single figure with three subplots for the environmental variables
+        fig_env, axes = plt.subplots(3, 1, figsize=(12, 18), sharex=True)
+        plt.style.use('seaborn-v0_8-whitegrid')
+
+        variables = ['temperature', 'rainfall', 'habitat_index']
+        titles = ['Annual Temperature Trend (Degrees Celsius)', 'Annual Rainfall Trend (mm)', 'Habitat Index Trend (Proportion)']
+        colors = ['#e67e22', '#3498db', '#27ae60']
+
+        for i, (var, title, color) in enumerate(zip(variables, titles, colors)):
+            ax = axes[i]
+            # Plot the variable against the year index
+            ax.plot(df.index.year, df[var], label=var.replace('_', ' ').title(), linewidth=3, color=color)
+            ax.set_title(title, fontsize=16)
+            ax.set_ylabel(var.replace('_', ' ').title(), fontsize=12)
+            ax.legend(loc='upper right')
+            ax.grid(True, linestyle='--', alpha=0.7)
+
+        # Set X-axis label only for the bottom plot
+        axes[-1].set_xlabel('Year', fontsize=12)
+        axes[-1].tick_params(axis='x', rotation=45)
+
+        st.pyplot(fig_env)
+        
     except Exception as e:
         # Catch and display general errors clearly
         st.error(f"An unexpected error occurred during model processing. This usually happens if the generated or uploaded data is too small/sparse for the selected model (especially LSTM).")
