@@ -13,7 +13,17 @@ from sklearn.metrics import mean_squared_error
 
 warnings.filterwarnings('ignore')
 
-st.title("Population Time Series Forecasting and Environmental Analysis")
+st.markdown("""
+<style>
+.main-header {
+    font-size: 48px; 
+    font-weight: 900; 
+    color: #57CA0F; 
+    text-align: center;
+    padding: 15px 0;
+    border-bottom: 4px solid #85F341; 
+    margin-bottom: 25px;
+}
 
 # === File Upload ===
 uploaded_file = st.file_uploader("Upload your CSV file", type=['csv'])
