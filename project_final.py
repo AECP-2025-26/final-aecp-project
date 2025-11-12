@@ -16,7 +16,7 @@ warnings.filterwarnings('ignore')
 st.markdown("""
 <style>
 .main-header {
-    font-size: 48px; 
+    font-size: 96px; 
     font-weight: 900; 
     color: #57CA0F; 
     text-align: center;
