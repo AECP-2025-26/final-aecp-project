@@ -26,6 +26,9 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+
+st.markdown('<p class="main-header">AECP: Animal Extinction Calendar Predictor</p>', unsafe_allow_html=True)
+st.write("Hi!")
 # === File Upload ===
 uploaded_file = st.file_uploader("Upload your CSV file", type=['csv'])
 if uploaded_file is not None:
