@@ -57,26 +57,27 @@ st.write("The Mean Squared Error (MSE) is calculated by taking the average of th
 st.write("The Root Mean Squared Error (RMSE) is the square root of the MSE, translating the error back into the original units of measurement. This makes RMSE the standard evaluation metric for users, as it clearly represents the average or typical magnitude of the error the model makes, providing an easily understood measure of accuracy.")
 st.write("The Habitat Index measures the proportion of suitable habitats for a country's species that remain intact, relative to a baseline set in the year 2001.")
 
-# --- Mock Preloaded Data Generation (Replace this with actual file loading if possible) ---
-# NOTE: If you have an actual CSV file named 'preloaded_data.csv' in your repository,
-# you would replace the logic inside this function with:
-# return pd.read_csv('preloaded_data.csv')
-
+# --- Data Generation Function (Now parameterized) ---
 @st.cache_data
-def generate_mock_data():
-    """Generates synthetic time-series data for demonstration."""
-    years = np.arange(1950, 2025)
+def generate_custom_data(start_year, num_years, initial_pop, decline_rate):
+    """Generates synthetic time-series data based on user-defined parameters."""
+    end_year = start_year + num_years
+    years = np.arange(start_year, end_year)
     
-    # Population trend (declining with some noise)
-    population_base = 5000 - 40 * (years - 1950)
-    population_noise = np.random.normal(0, 150, len(years))
-    population = np.maximum(50, population_base + population_noise) # Ensure population doesn't go below 50
+    # Population trend (linear decline with noise)
+    population_base = initial_pop - decline_rate * (years - start_year)
+    population_noise = np.random.normal(0, initial_pop * 0.05, len(years))
+    # Ensure population doesn't go below a safe threshold (e.g., 50)
+    population = np.maximum(50, population_base + population_noise) 
 
-    # Environmental factors (mock data)
-    temperature = 10 + 0.1 * (years - 1950) + np.random.normal(0, 0.5, len(years))
-    rainfall = 1000 - 5 * (years - 1950) + np.random.normal(0, 50, len(years))
-    # Habitat index (declining from 1.0)
-    habitat_index = 1.0 - 0.005 * (years - 1950) + np.random.normal(0, 0.05, len(years))
+    # Environmental factors (mock data, correlated with year/decline)
+    # Temperature rises slightly
+    temperature = 10 + 0.1 * (years - start_year) + np.random.normal(0, 0.5, len(years))
+    # Rainfall decreases slightly
+    rainfall = 1000 - 5 * (years - start_year) + np.random.normal(0, 50, len(years))
+    # Habitat index (declining from 1.0, influenced by decline_rate)
+    habitat_index_base = 1.0 - (decline_rate / initial_pop) * 5 * (years - start_year)
+    habitat_index = habitat_index_base + np.random.normal(0, 0.05, len(years))
     habitat_index = np.clip(habitat_index, 0.1, 1.0) # Clip between 0.1 and 1.0
 
     df = pd.DataFrame({
@@ -92,17 +93,43 @@ def generate_mock_data():
 st.subheader("1. Data Source Selection")
 
 data_source_choice = st.radio(
-    "How would you like to load your data?",
-    options=["Use Preloaded Sample Data", "Upload My Own CSV"],
+    "How would you like to obtain your data?",
+    options=["Generate Custom Data", "Upload My Own CSV"],
     index=0,
-    help="Use the preloaded data to see the app in action immediately, or upload your own time-series data."
+    help="Generate a synthetic dataset based on parameters, or upload your own time-series data."
 )
 
 df = None
 
-if data_source_choice == "Use Preloaded Sample Data":
-    df = generate_mock_data()
-    st.success("✅ Preloaded Sample Data loaded.")
+if data_source_choice == "Generate Custom Data":
+    with st.expander("Configure Generated Dataset Parameters", expanded=True):
+        col_gen_1, col_gen_2 = st.columns(2)
+        
+        with col_gen_1:
+            start_year = st.number_input(
+                "Historical Data Start Year:",
+                min_value=1900, max_value=2023, value=1950, step=1
+            )
+            initial_pop = st.number_input(
+                "Initial Population Size:",
+                min_value=1000, max_value=50000, value=10000, step=500,
+                help="The population count in the start year."
+            )
+            
+        with col_gen_2:
+            num_years = st.slider(
+                "Historical Data Length (Years):", 
+                min_value=50, max_value=200, value=75, step=10,
+                help="The number of historical data points to generate."
+            )
+            decline_rate = st.slider(
+                "Annual Population Decline Rate:", 
+                min_value=0.0, max_value=200.0, value=100.0, step=5.0,
+                help="The average number of individuals lost per year (Higher = steeper decline, faster extinction)."
+            )
+
+    df = generate_custom_data(start_year, num_years, initial_pop, decline_rate)
+    st.success("✅ Custom Synthetic Data generated successfully.")
 
 elif data_source_choice == "Upload My Own CSV":
     uploaded_file = st.file_uploader(
@@ -193,8 +220,13 @@ if df is not None:
             if len(test_data_scaled) > window_size:
                 X_test, y_test = create_sequences(test_data_scaled, window_size)
             else:
+                # Need enough data for the window size
                 st.warning(f"Test data size ({len(test_data_scaled)}) is too small for a window size of {window_size}. Skipping test set evaluation.")
             
+            if len(X_train) == 0:
+                st.error("Insufficient data points to create LSTM sequences. Try increasing the 'Historical Data Length' parameter.")
+                st.stop()
+                
             X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
 
             # Build and train the model on the full data for future prediction
@@ -342,7 +374,9 @@ if df is not None:
         # Use columns for input fields
         col_input_1, col_input_2 = st.columns(2)
         with col_input_1:
-            low_thriving = st.number_input("Lower Bound of Thriving Population:", min_value=min_pop, max_value=max_pop, value=int(max_pop * 0.9), step=100)
+            # Adjust default value to a percentage of max_pop to avoid immediate empty set for small data
+            low_thriving_default = max(min_pop, int(max_pop * 0.9)) if max_pop > 100 else min_pop 
+            low_thriving = st.number_input("Lower Bound of Thriving Population:", min_value=min_pop, max_value=max_pop, value=low_thriving_default, step=100)
         with col_input_2:
             high_thriving = st.number_input("Upper Bound of Thriving Population:", min_value=low_thriving, max_value=max_pop, value=max_pop, step=100)
 
@@ -381,7 +415,7 @@ if df is not None:
 
     except Exception as e:
         # Catch and display general errors clearly
-        st.error(f"An unexpected error occurred during processing. Please check the format of your uploaded CSV.")
+        st.error(f"An unexpected error occurred during model processing. This usually happens if the generated or uploaded data is too small/sparse for the selected model (especially LSTM).")
         st.exception(e)
         
 # --- Initial Message if no data is loaded yet ---
