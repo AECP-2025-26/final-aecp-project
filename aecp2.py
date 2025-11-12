@@ -17,12 +17,12 @@ warnings.filterwarnings('ignore')
 st.markdown("""
 <style>
 .main-header {
-    font-size: 48px; /* Bigger Title */
+    font-size: 48px; 
     font-weight: 900; 
-    color: #4B0082; /* Deep Purple */
+    color: #57CA0F; 
     text-align: center;
     padding: 15px 0;
-    border-bottom: 4px solid #6A5ACD; 
+    border-bottom: 4px solid #85F341; 
     margin-bottom: 25px;
 }
 /* New Green Style for Metrics */
@@ -47,7 +47,7 @@ st.markdown('<p class="main-header">AECP: Animal Extinction Calendar Predictor</
 
 # --- Welcome Message ---
 st.write("""
-Welcome to the **Animal Extinction Calendar Predictor (AECP)**! You're undertaking vital work by analyzing population and climate data. Use the steps below to forecast future trends and understand the optimal environmental conditions for the species.
+Welcome to the **Animal Extinction Calendar Predictor (AECP)**! The purpose of this app is analyzing population and climate data. Use the steps below to forecast future trends and understand the optimal environmental conditions for the species.
 """)
 
 # --- File Uploader Starts Here ---
@@ -239,7 +239,8 @@ if uploaded_file is not None:
             st.metric(
                 label="Mean Squared Error (MSE)", 
                 value=f"{mse:.2f}",
-                # CONTEXTUAL EXPLANATION FOR MSE
+                delta=None, 
+                delta_color="normal",
                 help="The Mean Squared Error (MSE) measures the average squared difference between the actual population and the model's prediction. A lower value indicates a more accurate model, as large errors are penalized heavily."
             )
         
