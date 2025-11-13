@@ -25,7 +25,7 @@ st.markdown("""
 <style>
     /* Main Header */
     .main-header {
-        font-size: 48px; /* Reduced from 96px */
+        font-size: 480px; /* Reduced from 96px */
         font-weight: 700;
         color: #004d40; /* A deep, professional teal */
         text-align: center;
