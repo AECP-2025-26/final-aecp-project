@@ -70,6 +70,20 @@ st.markdown("""
         border-radius: 10px;
         padding: 15px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+        color: #333333; /* <-- FIX: Set a default dark text color */
+    }
+
+    /* FIX: Explicitly set colors for metric components */
+    [data-testid="stMetricLabel"] {
+        color: #555555 !important; /* Dark gray for label */
+    }
+    
+    [data-testid="stMetricValue"] {
+        color: #004d40 !important; /* Main theme color for the value */
+    }
+    
+    [data-testid="stMetricDelta"] {
+        color: #555555 !important; /* Dark gray for delta */
     }
     
     /* Custom expander header */
