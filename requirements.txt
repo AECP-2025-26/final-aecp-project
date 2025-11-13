@@ -12,7 +12,6 @@ seaborn
 joblib
 tqdm
 pyyaml
-streamlit-option-menu
 streamlit
 pandas
 numpy
@@ -28,4 +27,4 @@ joblib
 tqdm
 pyyaml
 streamlit-option-menu
-
+tensorflow
