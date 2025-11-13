@@ -13,119 +13,55 @@ from sklearn.metrics import mean_squared_error
 
 warnings.filterwarnings('ignore')
 
+# --- Custom CSS for Aesthetics (Increased Header Size and GREEN Metrics) ---
 st.markdown("""
 <style>
 .main-header {
-    font-size: 96px; 
+    font-size: 48px; /* Bigger Title */
     font-weight: 900; 
-    color: #57CA0F; 
+    color: #4B0082; /* Deep Purple */
     text-align: center;
     padding: 15px 0;
-    border-bottom: 4px solid #85F341; 
+    border-bottom: 4px solid #6A5ACD; 
     margin-bottom: 25px;
+}
+/* New Green Style for Metrics - Text color forced dark for maximum visibility in Dark Mode */
+.stMetric > div {
+    background-color: #E6F7E8; /* Very Light Green Background */
+    padding: 15px;
+    border-radius: 10px;
+    border-left: 5px solid #4CAF50; /* Solid Green Border */
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
+}
+/* Force ALL text inside the stMetric component to be black/dark for contrast */
+.stMetric > div * {
+    color: #000000 !important;
+}
+/* Style for the main plot container */
+.stPlot > div {
+    border-radius: 12px;
+    padding: 20px;
+    background-color: #FFFFFF;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 </style>
 """, unsafe_allow_html=True)
+
 st.markdown('<p class="main-header">AECP: Animal Extinction Calendar Predictor</p>', unsafe_allow_html=True)
-#Wikipedia Definitions
-st.write("Hi! Since you're already familiar with the project's overview, let's dive into the Data Science aspect of AECP. This application uses an extensive, pre-processed dataset containing up to 250 years of population, habitat, deforestation, and rainfall index data. The libraries Scikit-learn and Statsmodels use this data to predict future population. You'll see this visualized with a polynomial regression curve on the graphs. Critically, the app's interactive component, powered by Streamlit, allows you to modify model hyperparameters. By changing these, you instantly generate new forecast scenarios, letting you see how conservation efforts (like reducing the decline rate by 75%) directly shift the projected extinction date. \n\n Here are the full forms and meanings of a few important terms: ")
-st.write("ARIMA: Autoregressive integrated moving average, and SARIMA: Seasonal Autoregressive integrated moving average. The autoregressive (AR) part of ARIMA indicates that the evolving variable of interest is regressed on its prior values. The moving average (MA) part indicates that the regression error is a linear combination of error terms whose values occurred contemporaneously and at various times in the past. The integrated (I) part indicates that the data values have been replaced with the difference between each value and the previous value.")
-st.write("LSTM stands for Long Short-Term Memory. It's a type of recurrent neural network designed to capture long-term dependencies in sequential data, making it ideal for tasks such as time series forecasting and analysis.") 
-st.write("The Mean Squared Error (MSE) is calculated by taking the average of the squared prediction errors. It serves as the loss function used internally during model training, where squaring the errors helps the learning algorithm focus on reducing large mistakes and outliers.")
-st.write("The Root Mean Squared Error (RMSE) is the square root of the MSE, translating the error back into the original units of measurement. This makes RMSE the standard evaluation metric for users, as it clearly represents the average or typical magnitude of the error the model makes, providing an easily understood measure of accuracy.")
-st.write("The Habitat Index measures the proportion of suitable habitats for a country's species that remain intact, relative to a baseline set in the year 2001.")
 
-# Synthetic Data function (imported)
-@st.cache_data
-def generate_custom_data(start_year, num_years, initial_pop, decline_rate):
-    """Generates synthetic time-series data based on user-defined parameters."""
-    end_year = start_year + num_years
-    years = np.arange(start_year, end_year)
-    
-    # Population trend (linear decline with noise)
-    population_base = initial_pop - decline_rate * (years - start_year)
-    population_noise = np.random.normal(0, initial_pop * 0.05, len(years))
-    # Ensure population doesn't go below a safe threshold (e.g., 50)
-    population = np.maximum(50, population_base + population_noise) 
+# --- Welcome Message ---
+st.write("""
+Welcome to the **Animal Extinction Calendar Predictor (AECP)**! You're undertaking vital work by analyzing population and climate data. Use the steps below to forecast future trends and understand the optimal environmental conditions for the species.
+""")
 
-    # Environmental factors (mock data, correlated with year/decline)
-    # Temperature rises slightly
-    temperature = 10 + 0.1 * (years - start_year) + np.random.normal(0, 0.5, len(years))
-    # Rainfall decreases slightly
-    rainfall = 1000 - 5 * (years - start_year) + np.random.normal(0, 50, len(years))
-    # Habitat index (declining from 1.0, influenced by decline_rate)
-    habitat_index_base = 1.0 - (decline_rate / initial_pop) * 5 * (years - start_year)
-    habitat_index = habitat_index_base + np.random.normal(0, 0.05, len(years))
-    habitat_index = np.clip(habitat_index, 0.1, 1.0) # Clip between 0.1 and 1.0
+# --- File Uploader Starts Here ---
+uploaded_file = st.file_uploader("Upload your annual time-series CSV file", type=['csv'])
 
-    df = pd.DataFrame({
-        'year': years,
-        'population': population.astype(int),
-        'temperature': temperature.round(1),
-        'rainfall': rainfall.astype(int),
-        'habitat_index': habitat_index.round(2)
-    })
-    return df
-
-st.subheader("1. Data Source Selection")
-
-data_source_choice = st.radio(
-    "How would you like to obtain your data?",
-    options=["Generate Custom Data", "Upload My Own CSV"],
-    index=0,
-    help="Generate a synthetic dataset based on parameters, or upload your own time-series data."
-)
-
-df = None
-
-if data_source_choice == "Generate Custom Data":
-    with st.expander("Configure Generated Dataset Parameters", expanded=True):
-        col_gen_1, col_gen_2 = st.columns(2)
-        
-        with col_gen_1:
-            start_year = st.number_input(
-                "Historical Data Start Year:",
-                min_value=1900, max_value=2023, value=1950, step=1
-            )
-            initial_pop = st.number_input(
-                "Initial Population Size:",
-                min_value=1000, max_value=50000, value=10000, step=500,
-                help="The population count in the start year."
-            )
-            
-        with col_gen_2:
-            num_years = st.slider(
-                "Historical Data Length (Years):", 
-                min_value=50, max_value=200, value=75, step=10,
-                help="The number of historical data points to generate."
-            )
-            decline_rate = st.slider(
-                "Annual Population Decline Rate:", 
-                min_value=0.0, max_value=200.0, value=100.0, step=5.0,
-                help="The average number of individuals lost per year (Higher = steeper decline, faster extinction)."
-            )
-
-    df = generate_custom_data(start_year, num_years, initial_pop, decline_rate)
-    st.success("✅ Custom Synthetic Data generated successfully.")
-
-elif data_source_choice == "Upload My Own CSV":
-    uploaded_file = st.file_uploader(
-        "Upload your annual time-series CSV file", 
-        type=['csv'],
-        help="The CSV must contain columns: `year`, `population`, `temperature`, `rainfall`, `habitat_index`."
-    )
-    if uploaded_file is not None:
-        try:
-            df = pd.read_csv(uploaded_file)
-            st.success("✅ Custom CSV file loaded successfully!")
-        except Exception as e:
-            st.error(f"Error reading uploaded file: {e}")
-            df = None
-            
-if df is not None:
+if uploaded_file is not None:
     try:
-        st.subheader("2. Data Preprocessing and Validation")
+        df = pd.read_csv(uploaded_file)
         
+        # --- Data Preprocessing ---
         df['year'] = pd.to_datetime(df['year'], format='%Y', errors='coerce')
         df.dropna(subset=['year'], inplace=True)
         df.set_index('year', inplace=True)
@@ -140,11 +76,9 @@ if df is not None:
         # Ensure data is sorted by index (year)
         df.sort_index(inplace=True)
 
-        st.info(f"Historical range: **{df.index.year.min()}** to **{df.index.year.max()}**. Total data points: **{len(df)}**.")
+        st.success(f"✅ Data loaded successfully! Historical range: **{df.index.year.min()}** to **{df.index.year.max()}**. Now, let's pick a model.")
         
         # --- Model Selection and Data Split ---
-        st.subheader("3. Model Configuration and Forecasting")
-        
         # 80/20 split for training and testing
         train_size = int(len(df) * 0.8)
         train_data, test_data = df.iloc[:train_size], df.iloc[train_size:]
@@ -172,13 +106,13 @@ if df is not None:
         # --- Forecasting Logic ---
         forecast_label = f'{algorithm_choice} Forecast'
         rmse, mse = 0, 0
-        window_size = 5 # Default window size for LSTM
-
+        
         if algorithm_choice == 'LSTM':
             # LSTM requires data normalization (MinMaxScaler) and sequence creation
             scaler = MinMaxScaler()
             train_data_scaled = scaler.fit_transform(train_data[['population']])
             test_data_scaled = scaler.transform(test_data[['population']])
+            window_size = 5 # Defines the number of past years used to predict the next year
             
             @st.cache_data
             def create_sequences(data, window):
@@ -191,16 +125,11 @@ if df is not None:
             # Create sequences for training and testing
             X_train, y_train = create_sequences(train_data_scaled, window_size)
             
-            X_test, y_test = [], []
             if len(test_data_scaled) > window_size:
                 X_test, y_test = create_sequences(test_data_scaled, window_size)
             else:
-                # Need enough data for the window size
                 st.warning(f"Test data size ({len(test_data_scaled)}) is too small for a window size of {window_size}. Skipping test set evaluation.")
-            
-            if len(X_train) == 0:
-                st.error("Insufficient data points to create LSTM sequences. Try increasing the 'Historical Data Length' parameter.")
-                st.stop()
+                X_test = [] 
                 
             X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
 
@@ -244,39 +173,89 @@ if df is not None:
 
         elif algorithm_choice == 'ARIMA':
             with st.spinner(f"Fitting {algorithm_choice} model..."):
-                # Fit on training data for evaluation
-                arima_model = ARIMA(train_data['population'], order=(3,1,1)).fit()
-                arima_forecast_test = arima_model.forecast(steps=len(test_data))
-                
-                mse = mean_squared_error(test_data['population'], arima_forecast_test)
-                rmse = np.sqrt(mse)
-                
-                # Fit on full data for future forecast
-                arima_model_full = ARIMA(df['population'], order=(3,1,1)).fit()
-                forecast_full = arima_model_full.forecast(steps=future_steps).values
+                try:
+                    # Attempt the original order (3,1,1)
+                    arima_model = ARIMA(train_data['population'], order=(3,1,1)).fit(low_memory=True)
+                except Exception as e:
+                    st.warning(f"ARIMA(3,1,1) fit failed (Convergence Error). Retrying with simpler order (1,1,1). Error: {e}")
+                    # Fallback to a simpler, more stable order
+                    try:
+                        arima_model = ARIMA(train_data['population'], order=(1,1,1)).fit(low_memory=True)
+                    except:
+                        st.error("ARIMA(1,1,1) also failed to converge. Setting forecast to mean of last 10 years.")
+                        # Emergency fallback to simple mean
+                        test_mean = train_data['population'].iloc[-10:].mean()
+                        arima_forecast_test = pd.Series([test_mean] * len(test_data), index=test_data.index)
+                        forecast_full = np.array([df['population'].iloc[-10:].mean()] * future_steps)
+                        mse = 0
+                        rmse = 0
 
+                if 'arima_model' in locals():
+                    arima_forecast_test = arima_model.forecast(steps=len(test_data))
+                    
+                    # Ensure prediction length matches test data length for metric calculation
+                    if len(arima_forecast_test) == len(test_data):
+                        mse = mean_squared_error(test_data['population'], arima_forecast_test)
+                        rmse = np.sqrt(mse)
+                    else:
+                        st.warning("ARIMA test forecast length mismatch. Skipping test metrics.")
+                        
+                    # Fit full model for future prediction
+                    try:
+                        arima_model_full = ARIMA(df['population'], order=(3,1,1)).fit(low_memory=True)
+                    except:
+                         st.warning("ARIMA(3,1,1) full data fit failed. Retrying with simpler order (1,1,1).")
+                         arima_model_full = ARIMA(df['population'], order=(1,1,1)).fit(low_memory=True)
+
+                    forecast_full = arima_model_full.forecast(steps=future_steps).values
+                
         elif algorithm_choice == 'SARIMA':
             with st.spinner(f"Fitting {algorithm_choice} model..."):
-                # Fit on training data for evaluation
-                sarima_model = SARIMAX(train_data['population'], order=(1,1,1), seasonal_order=(0,0,0,0)).fit(disp=False)
-                sarima_forecast_test = sarima_model.forecast(steps=len(test_data))
-                
-                mse = mean_squared_error(test_data['population'], sarima_forecast_test)
-                rmse = np.sqrt(mse)
-                
-                # Fit on full data for future forecast
-                sarima_model_full = SARIMAX(df['population'], order=(1,1,1), seasonal_order=(0,0,0,0)).fit(disp=False)
-                forecast_full = sarima_model_full.forecast(steps=future_steps).values
+                try:
+                    # Attempt the original non-seasonal order (1,1,1)
+                    sarima_model = SARIMAX(train_data['population'], order=(1,1,1), seasonal_order=(0,0,0,0)).fit(disp=False, low_memory=True)
+                except Exception as e:
+                    st.warning(f"SARIMA(1,1,1) fit failed (Convergence Error). Retrying with simpler order (0,1,0). Error: {e}")
+                    # Fallback to a simpler order
+                    try:
+                        sarima_model = SARIMAX(train_data['population'], order=(0,1,0), seasonal_order=(0,0,0,0)).fit(disp=False, low_memory=True)
+                    except:
+                        st.error("SARIMA(0,1,0) also failed to converge. Setting forecast to mean of last 10 years.")
+                        # Emergency fallback to simple mean
+                        test_mean = train_data['population'].iloc[-10:].mean()
+                        sarima_forecast_test = pd.Series([test_mean] * len(test_data), index=test_data.index)
+                        forecast_full = np.array([df['population'].iloc[-10:].mean()] * future_steps)
+                        mse = 0
+                        rmse = 0
+
+                if 'sarima_model' in locals():
+                    sarima_forecast_test = sarima_model.forecast(steps=len(test_data))
+                    
+                    if len(sarima_forecast_test) == len(test_data):
+                        mse = mean_squared_error(test_data['population'], sarima_forecast_test)
+                        rmse = np.sqrt(mse)
+                    else:
+                        st.warning("SARIMA test forecast length mismatch. Skipping test metrics.")
+
+                    # Fit full model for future prediction
+                    try:
+                        sarima_model_full = SARIMAX(df['population'], order=(1,1,1), seasonal_order=(0,0,0,0)).fit(disp=False, low_memory=True)
+                    except:
+                        st.warning("SARIMA(1,1,1) full data fit failed. Retrying with simpler order (0,1,0).")
+                        sarima_model_full = SARIMAX(df['population'], order=(0,1,0), seasonal_order=(0,0,0,0)).fit(disp=False, low_memory=True)
+                        
+                    forecast_full = sarima_model_full.forecast(steps=future_steps).values
+
 
         # --- Extinction Check ---
         extinction_year = None
         for i, val in enumerate(forecast_full):
+            # Population cannot be less than 0
             if val <= 0:
                 extinction_year = df.index.year.max() + i + 1
                 break
 
         # --- Plotting ---
-        st.subheader("4. Forecast Visualization")
         years_future = np.arange(df.index.year.max() + 1, df.index.year.max() + 1 + future_steps)
         
         fig, ax = plt.subplots(figsize=(12, 6))
@@ -291,8 +270,8 @@ if df is not None:
         is_test_data_plotted = False
         if algorithm_choice != 'LSTM' or (len(test_data) > (window_size if algorithm_choice == 'LSTM' else 0)):
              if len(test_data) > (window_size if algorithm_choice == 'LSTM' else 0):
-                 ax.plot(test_data.index.year, test_data['population'], label='Actual Test Data', linewidth=3, color='#2ecc71') 
-                 is_test_data_plotted = True
+                ax.plot(test_data.index.year, test_data['population'], label='Actual Test Data', linewidth=3, color='#2ecc71') 
+                is_test_data_plotted = True
 
         # Highlight extinction point if found
         if extinction_year:
@@ -312,15 +291,15 @@ if df is not None:
         # --- Results and Metrics ---
         st.markdown("---")
         st.subheader("Model Performance and Outlook")
-        min_pop, max_pop = int(df['population'].min()), int(df['population'].max())
+
         col_metric_1, col_metric_2, col_alert = st.columns([1, 1, 2])
-        acc= mse/min_pop
+        
         with col_metric_1:
             st.metric(
-                label="Scaled Loss Factor", 
-                value=f"{acc:.2f}",
-                
-                help="The scaled loss factor serves as an error metric that reduces the typical prediction error of RMSE by the size of the dataset. Its main function is to create an extremely small numerical value used as a loss function, which can improve numerical stability in specialized model training environments."
+                label="Mean Squared Error (MSE)", 
+                value=f"{mse:.2f}",
+                # CONTEXTUAL EXPLANATION FOR MSE
+                help="The Mean Squared Error (MSE) measures the average squared difference between the actual population and the model's prediction. A lower value indicates a more accurate model, as large errors are penalized heavily."
             )
         
         with col_metric_2:
@@ -342,16 +321,14 @@ if df is not None:
 
         # --- Environmental Analysis Section ---
         st.markdown("---")
-        st.subheader("5. Environmental Analysis: Identifying Thriving Conditions")
+        st.subheader("Environmental Analysis: Identifying Thriving Conditions")
         
         min_pop, max_pop = int(df['population'].min()), int(df['population'].max())
         
         # Use columns for input fields
         col_input_1, col_input_2 = st.columns(2)
         with col_input_1:
-            # Adjust default value to a percentage of max_pop to avoid immediate empty set for small data
-            low_thriving_default = max(min_pop, int(max_pop * 0.9)) if max_pop > 100 else min_pop 
-            low_thriving = st.number_input("Lower Bound of Thriving Population:", min_value=min_pop, max_value=max_pop, value=low_thriving_default, step=100)
+            low_thriving = st.number_input("Lower Bound of Thriving Population:", min_value=min_pop, max_value=max_pop, value=int(max_pop * 0.9), step=100)
         with col_input_2:
             high_thriving = st.number_input("Upper Bound of Thriving Population:", min_value=low_thriving, max_value=max_pop, value=max_pop, step=100)
 
@@ -388,41 +365,11 @@ if df is not None:
             
             st.caption(f"Insight achieved: Optimal conditions derived from **{len(thriving_years)}** historical data point(s) where population thrived.")
 
-
-        # --- NEW SECTION: Independent Variable Trends (Section 6) ---
-        st.markdown("---")
-        st.subheader("6. Environmental Variable Trends")
-
-        # Create a single figure with three subplots for the environmental variables
-        fig_env, axes = plt.subplots(3, 1, figsize=(12, 18), sharex=True)
-        plt.style.use('seaborn-v0_8-whitegrid')
-
-        variables = ['temperature', 'rainfall', 'habitat_index']
-        titles = ['Annual Temperature Trend (Degrees Celsius)', 'Annual Rainfall Trend (mm)', 'Habitat Index Trend (Proportion)']
-        colors = ['#e67e22', '#3498db', '#27ae60']
-
-        for i, (var, title, color) in enumerate(zip(variables, titles, colors)):
-            ax = axes[i]
-            # Plot the variable against the year index
-            ax.plot(df.index.year, df[var], label=var.replace('_', ' ').title(), linewidth=3, color=color)
-            ax.set_title(title, fontsize=16)
-            ax.set_ylabel(var.replace('_', ' ').title(), fontsize=12)
-            ax.legend(loc='upper right')
-            ax.grid(True, linestyle='--', alpha=0.7)
-
-        # Set X-axis label only for the bottom plot
-        axes[-1].set_xlabel('Year', fontsize=12)
-        axes[-1].tick_params(axis='x', rotation=45)
-
-        st.pyplot(fig_env)
-        
     except Exception as e:
         # Catch and display general errors clearly
-        st.error(f"An unexpected error occurred during model processing. This usually happens if the generated or uploaded data is too small/sparse for the selected model (especially LSTM).")
+        st.error(f"An unexpected error occurred during processing: {e}")
         st.exception(e)
-        
-# --- Initial Message if no data is loaded yet ---
-if df is None and data_source_choice == "Upload My Own CSV":
+elif uploaded_file is None:
     st.info("Please upload a CSV file to begin the analysis. Required columns: `year`, `population`, `temperature`, `rainfall`, `habitat_index`.")
     st.markdown("""
         **Example Data Structure:**
