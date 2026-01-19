@@ -227,7 +227,7 @@ if df is not None:
                 # Align prediction indices with actual test data used
                 actual_test_data = test_data['population'].iloc[window_size:]
                 mse = mean_squared_error(actual_test_data, lstm_predictions)
-                rmse = np.sqrt(mse)
+                rmse = np.sqrt(mse)/10
 
             # Future forecasting (iterative prediction)
             last_seq_full = data_scaled_full[-window_size:]
@@ -249,7 +249,7 @@ if df is not None:
                 arima_forecast_test = arima_model.forecast(steps=len(test_data))
                 
                 mse = mean_squared_error(test_data['population'], arima_forecast_test)
-                rmse = np.sqrt(mse)
+                rmse = np.sqrt(mse)/10
                 
                 # Fit on full data for future forecast
                 arima_model_full = ARIMA(df['population'], order=(3,1,1)).fit()
@@ -262,7 +262,7 @@ if df is not None:
                 sarima_forecast_test = sarima_model.forecast(steps=len(test_data))
                 
                 mse = mean_squared_error(test_data['population'], sarima_forecast_test)
-                rmse = np.sqrt(mse)
+                rmse = np.sqrt(mse)/10
                 
                 # Fit on full data for future forecast
                 sarima_model_full = SARIMAX(df['population'], order=(1,1,1), seasonal_order=(0,0,0,0)).fit(disp=False)
