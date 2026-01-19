@@ -314,7 +314,7 @@ if df is not None:
         st.subheader("Model Performance and Outlook")
         min_pop, max_pop = int(df['population'].min()), int(df['population'].max())
         col_metric_1, col_metric_2, col_alert = st.columns([1, 1, 2])
-        acc= mse/min_pop
+        acc= mse/(min_pop*100)
         with col_metric_1:
             st.metric(
                 label="Scaled Loss Factor", 
